@@ -1,0 +1,26 @@
+<package>
+  <description brief="graphcuts">
+
+     graphcuts
+
+  </description>
+  <author>teichman</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/graphcuts</url>
+  <depend package="maxflow"/>
+  <depend package="eigen_extensions"/>
+  <depend package="bag_of_tricks"/>
+  <depend package="serializable"/>
+  <depend package="name_mapping"/>
+  <depend package="timer"/>
+  <depend package="optimization"/>
+  <depend package="rosconsole"/>
+
+  <export>
+    <cpp cflags="-I${prefix}/include" lflags="-L${prefix}/lib -Wl,-rpath ${prefix}/lib -lgraphcuts"/>
+  </export>
+  
+</package>
+
+

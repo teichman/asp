@@ -1,0 +1,29 @@
+<package>
+  <description brief="maxflow">
+
+     This package is a simple downloader for the Max-flow/min-cut code from Yuri Boykov and Olga Veksler available at http://vision.csd.uwo.ca/code/.  If you use their code in an academic work, you should cite their paper:
+
+     "An Experimental Comparison of Min-Cut/Max-Flow Algorithms for Energy Minimization in Vision."
+     Yuri Boykov and Vladimir Kolmogorov.
+     In IEEE Transactions on Pattern Analysis and Machine Intelligence (PAMI),
+     September 2004
+                                     
+     Please note this code is not BSD.  From the readme:
+     
+     "This software can be used for research purposes only.
+     If you require another license, you may consider using version 2.21
+     (which implements exactly the same algorithm, but does not have the option of reusing search trees)."
+     
+     For license details, see the README.TXT available in the build/ directory after making this package.
+
+  </description>
+  <license>Research only</license>
+  <review status="unreviewed" notes=""/>
+
+  <export>
+    <cpp cflags="-isystem${prefix}/include" lflags="-L${prefix}/lib -Wl,-rpath,${prefix}/lib -lmaxflow"/>
+  </export>
+
+</package>
+
+

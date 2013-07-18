@@ -1,0 +1,17 @@
+NameMappable
+2
+cmap
+NameMapping
+SERIALIZATION_VERSION 2
+num_names 3
+car
+pedestrian
+bicyclist
+dmap
+NameMapping
+SERIALIZATION_VERSION 2
+num_names 4
+SpinImage
+HOG
+Size
+Fury

@@ -1,0 +1,21 @@
+<package>
+  <description brief="opencv_bleeding">
+
+     opencv_bleeding
+
+  </description>
+  <author>teichman</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/opencv_bleeding</url>
+
+    <export>
+      <cpp cflags="-I${prefix}/source/OpenCV-2.4.0/include/opencv -I${prefix}/source/OpenCV-2.4.0/modules/features2d/include -I${prefix}/source/OpenCV-2.4.0/modules/core/include -I${prefix}/source/OpenCV-2.4.0/modules/objdetect/include -I${prefix}/source/OpenCV-2.4.0/modules/gpu/include -I${prefix}/source/OpenCV-2.4.0/modules/photo/include -I${prefix}/source/OpenCV-2.4.0/modules/stitching/include -I${prefix}/source/OpenCV-2.4.0/modules/flann/include -I${prefix}/source/OpenCV-2.4.0/modules/highgui/include -I${prefix}/source/OpenCV-2.4.0/modules/androidcamera/include -I${prefix}/source/OpenCV-2.4.0/modules/ml/include -I${prefix}/source/OpenCV-2.4.0/modules/nonfree/include -I${prefix}/source/OpenCV-2.4.0/modules/video/include -I${prefix}/source/OpenCV-2.4.0/modules/ts/include -I${prefix}/source/OpenCV-2.4.0/modules/videostab/include -I${prefix}/source/OpenCV-2.4.0/modules/calib3d/include -I${prefix}/source/OpenCV-2.4.0/modules/legacy/include -I${prefix}/source/OpenCV-2.4.0/modules/imgproc/include -I${prefix}/source/OpenCV-2.4.0/modules/contrib/include -I${prefix}/source/OpenCV-2.4.0/include"
+	   lflags="-L${prefix}/source/OpenCV-2.4.0/release/lib -Wl,-rpath,${prefix}/source/OpenCV-2.4.0/release/lib -lopencv_calib3d -lopencv_contrib -lopencv_core -lopencv_features2d -lopencv_flann -lopencv_gpu -lopencv_highgui -lopencv_imgproc -lopencv_legacy -lopencv_ml -lopencv_nonfree -lopencv_objdetect -lopencv_photo -lopencv_stitching -lopencv_ts -lopencv_video -lopencv_videostab"/>
+		   
+    </export>
+
+  
+</package>
+
+

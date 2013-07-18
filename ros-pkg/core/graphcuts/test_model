@@ -1,0 +1,8 @@
+Graphcuts Model v0.1
+== 2 node potential weights == 
+node_descriptor0	3.141592653589793
+node_descriptor1	42.13
+== 3 edge potential weights == 
+edge_descriptor0	0
+edge_descriptor1	3.141592653589793
+edge_descriptor2	42.13
