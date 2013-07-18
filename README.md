@@ -1,0 +1,4 @@
+asp
+===
+
+Abstract segmentation pipeline
