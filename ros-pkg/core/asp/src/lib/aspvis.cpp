@@ -70,6 +70,7 @@ namespace asp
       lockWrite();
       debug_ = !debug_;
       cout << "debug_: " << debug_ << endl;
+      unlockWrite();
       break;
     case 'c':
       lockWrite();
