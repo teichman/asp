@@ -177,7 +177,7 @@ namespace asp
     pc->applyNameMapping("nmap", generateNameMapping());
     
     vector<const MatrixXd*> node;
-    pull("UnweightedNode", &node);
+    multiPull("UnweightedNode", &node);
     pc->node_.resize(node.size());
     for(size_t i = 0; i < node.size(); ++i) {
       pc->node_[i].resize(node[i]->rows() * node[i]->cols());
