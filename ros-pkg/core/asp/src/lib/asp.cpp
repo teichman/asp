@@ -38,8 +38,8 @@ namespace asp
   Model Asp::defaultModel() const
   {
     Model mod = model();
-    mod.nweights_ = VectorXd::Zero(mod.nameMapping("nmap").size());
-    mod.eweights_ = VectorXd::Zero(mod.nameMapping("emap").size());
+    mod.nweights_ = VectorXd::Ones(mod.nameMapping("nmap").size());
+    mod.eweights_ = VectorXd::Ones(mod.nameMapping("emap").size());
     return mod;
   }
 
