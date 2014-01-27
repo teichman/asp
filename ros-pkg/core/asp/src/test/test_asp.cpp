@@ -57,7 +57,7 @@ TEST(NodePotentialGenerator, NodePotentialGenerator)
   asp.compute();
   cout << asp.reportTiming() << endl;
 
-  asp.writeGraphviz("graphvis");
+  asp.writeGraphviz("graphviz");
 }
 
 TEST(SparseMat, SparseMat)

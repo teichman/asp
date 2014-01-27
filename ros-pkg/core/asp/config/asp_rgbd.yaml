@@ -4,6 +4,10 @@ Pipeline:
       Type: EntryPoint<cv::Mat3b>
       Params: ~
       Inputs: ~
+    - Name: DepthMatEntryPoint
+      Type: EntryPoint<DepthMatConstPtr>
+      Params: ~
+      Inputs: ~
     - Name: MaskEntryPoint
       Type: EntryPoint<cv::Mat1b>
       Params: ~
@@ -12,6 +16,19 @@ Pipeline:
       Type: EntryPoint<cv::Mat1b>
       Params: ~
       Inputs: ~
+    - Name: DepthMatProjector
+      Type: DepthMatProjector
+      Params: ~
+      Inputs:
+        Image: ColorImageEntryPoint.Output
+        DepthMat: DepthMatEntryPoint.Output
+    - Name: OrganizedSurfaceNormalPod
+      Type: OrganizedSurfaceNormalPod
+      Params:
+        Radius: 3
+      Inputs:
+        Mask: MaskEntryPoint.Output
+        Cloud: DepthMatProjector.Cloud
     - Name: SeedNPG
       Type: SeedNPG
       Inputs:

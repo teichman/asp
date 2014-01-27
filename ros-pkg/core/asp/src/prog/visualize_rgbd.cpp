@@ -6,7 +6,7 @@
 #include <iomanip>
 #include <opencv2/highgui/highgui.hpp>
 #include <ros/assert.h>
-#include <asp/asp.h>
+#include <asp/rgbd.h>
 
 using namespace std;
 using namespace asp;
@@ -25,6 +25,7 @@ public:
   {
     asp_.setDebug(true);
     asp_.setModel(asp_.defaultModel());
+    asp_.writeGraphviz("graphviz");
   }
   
   void run()
@@ -34,19 +35,21 @@ public:
   }
 
   void rgbdCallback(openni::VideoFrameRef oni_color,
-                    openni::VideoFrameRef depth,
+                    openni::VideoFrameRef oni_depth,
                     size_t frame_id, double timestamp)
   {
-    ROS_ASSERT(depth.getHeight() > 0 && depth.getWidth() > 0);
+    ROS_ASSERT(oni_depth.getHeight() > 0 && oni_depth.getWidth() > 0);
     cv::Mat3b color = oniToCV(oni_color);
-    cv::imshow("Depth", colorize(oniDepthToEigen(depth), 0, 10));
+    DepthMatConstPtr depth = oniDepthToEigenPtr(oni_depth);
+    cv::imshow("Depth", colorize(*depth, 0, 10));
     cv::imshow("Color", oniToCV(oni_color));
-    cv::imshow("Visualization", visualize(oni_color, depth));
+    cv::imshow("Visualization", visualize(oni_color, oni_depth));
     char key = cv::waitKey(3);
 
     if(key == ' ') {
       cout << "Segmenting" << endl;
       asp_.setInput("ColorImageEntryPoint", color);
+      asp_.setInput("DepthMatEntryPoint", depth);
       asp_.setInput("MaskEntryPoint", cv::Mat1b(color.size(), 255));
       asp_.setInput("SeedEntryPoint", cv::Mat1b(color.size(), 127));
       asp_.compute();
@@ -90,17 +93,20 @@ int main(int argc, char** argv)
       
   REGISTER_POD_TEMPLATE(EntryPoint, cv::Mat3b);
   REGISTER_POD_TEMPLATE(EntryPoint, cv::Mat1b);
+  REGISTER_POD_TEMPLATE(EntryPoint, DepthMatConstPtr);
   REGISTER_POD(EdgeStructureGenerator);
   REGISTER_POD(SimpleColorDifferenceEPG);
   REGISTER_POD(EdgePotentialAggregator);
   REGISTER_POD(NodePotentialAggregator);
   REGISTER_POD(SeedNPG);
   REGISTER_POD(PriorNPG);
+  REGISTER_POD(DepthMatProjector);
+  REGISTER_POD(OrganizedSurfaceNormalPod);
   
   // -- Load the config.
   YAML::Node config = YAML::LoadFile(config_path);
   ROS_ASSERT(config["Pipeline"]);
-
+  
   
   OpenNI2Interface::Resolution color_res = OpenNI2Interface::VGA;
   if(opts.count("color-res")) {
