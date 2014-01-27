@@ -1,0 +1,23 @@
+<package>
+  <description brief="openni2">
+
+    You might need to install the following:
+      sudo apt-get install libudev-dev openjdk-7-jdk freeglut3-dev libglu1-mesa-dev libusb-1.0-0-dev
+
+    Once this package has been built, you must run
+      sudo make install
+    to install udev rules.
+
+  </description>
+  <author>Demo User</author>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/openni2</url>
+
+  <export>
+    <cpp cflags="-I${prefix}/git/Include"
+         lflags="-Wl,-rpath,${prefix}/git/Bin/Arm-Release -L${prefix}/git/Bin/Arm-Release -Wl,-rpath,${prefix}/git/Bin/x64-Release -L${prefix}/git/Bin/x64-Release -lOpenNI2" />
+  </export>
+  
+</package>
+
+

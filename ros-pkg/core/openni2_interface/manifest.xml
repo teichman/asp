@@ -1,0 +1,27 @@
+<package>
+  <description brief="openni2_interface">
+
+     openni2_interface
+
+  </description>
+  <author>teichman</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/openni2_interface</url>
+
+  <depend package="openni2"/>
+  <depend package="rosconsole"/>
+  <depend package="opencv_bleeding"/>
+  <depend package="eigen_flags"/>
+  <depend package="timer"/>
+  <depend package="bag_of_tricks"/>
+  <depend package="agent"/>
+
+  <export>
+    <cpp cflags="-I${prefix}/include"
+	 lflags="-Wl,-rpath,${prefix}/lib -L${prefix}/lib -lopenni2_interface" />
+  </export>
+  
+</package>
+
+
