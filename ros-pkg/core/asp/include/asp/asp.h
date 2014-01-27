@@ -21,7 +21,10 @@ namespace asp
   class Asp : public Pipeline
   {
   public:
+    //! Initialize using initializePipeline.
     Asp(int num_threads);
+    //! Initialize using the Pods described in config.
+    Asp(int num_threads, YAML::Node config);
     virtual ~Asp() {};
 
     //! Names are automatically filled in based on Pipeline pod names.
@@ -225,8 +228,8 @@ namespace asp
       declareParam<bool>("Grid", false);
       declareParam<bool>("Diagonal", false);
       declareParam<bool>("Web", false);
-      declareParam<float>("WebMaxRadius", 10);  // In pixels.
-      declareParam<int>("WebNumOutgoing", 2);
+      declareParam<double>("WebMaxRadius", 10);  // In pixels.
+      declareParam<double>("WebNumOutgoing", 2);
       
       declareInput<cv::Mat3b>("Image");
       declareInput<cv::Mat1b>("Mask");

@@ -1,0 +1,50 @@
+Pipeline:
+  Pods:
+    - Name: ColorImageEntryPoint
+      Type: EntryPoint<cv::Mat3b>
+      Params: ~
+      Inputs: ~
+    - Name: MaskEntryPoint
+      Type: EntryPoint<cv::Mat1b>
+      Params: ~
+      Inputs: ~
+    - Name: SeedEntryPoint
+      Type: EntryPoint<cv::Mat1b>
+      Params: ~
+      Inputs: ~
+    - Name: SeedNPG
+      Type: SeedNPG
+      Inputs:
+        SeedImage: SeedEntryPoint.Output
+        Image: ColorImageEntryPoint.Output
+    - Name: EdgeStructureGenerator
+      Type: EdgeStructureGenerator
+      Params:
+        Grid: False
+        Diagonal: False
+        Web: True
+        WebMaxRadius: 7
+        WebNumOutgoing: 3
+      Inputs:
+        Image: ColorImageEntryPoint.Output
+        Mask: MaskEntryPoint.Output
+    - Name: SimpleColorDifferenceEPG
+      Type: SimpleColorDifferenceEPG
+      Params:
+        Sigma: 30
+      Inputs:
+        Image: ColorImageEntryPoint.Output
+        EdgeStructure: EdgeStructureGenerator.EdgeStructure
+    - Name: EdgePotentialAggregator
+      Type: EdgePotentialAggregator
+      Params: ~
+      Inputs:
+        Image: ColorImageEntryPoint.Output
+        EdgeStructure: EdgeStructureGenerator.EdgeStructure
+        UnweightedEdge: SimpleColorDifferenceEPG.Edge
+    - Name: NodePotentialAggregator
+      Type: NodePotentialAggregator
+      Params: ~
+      Inputs:
+        Image: ColorImageEntryPoint.Output
+        UnweightedNode: SeedNPG.Node

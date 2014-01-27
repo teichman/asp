@@ -35,6 +35,12 @@ namespace asp
     connect("PriorNPG.Node -> NodePotentialAggregator.UnweightedNode");
   }
 
+  Asp::Asp(int num_threads, YAML::Node config) :
+    Pipeline(num_threads)
+  {
+    deYAMLize(config);
+  }
+  
   Model Asp::defaultModel() const
   {
     Model mod = model();
@@ -447,7 +453,7 @@ namespace asp
     if(param<bool>("Diagonal"))
       reserve_per_pixel += 4;
     if(param<bool>("Web"))
-      reserve_per_pixel += param<int>("WebNumOutgoing");
+      reserve_per_pixel += param<double>("WebNumOutgoing");
     initializeSparseMat(img.rows, img.cols, reserve_per_pixel, &structure_);
 
     // -- Generate edges.
@@ -480,7 +486,7 @@ namespace asp
       structure_ += diag_;
     }
     if(param<bool>("Web")) {
-      initializeSparseMat(img.rows, img.cols, param<int>("WebNumOutgoing"), &web_);
+      initializeSparseMat(img.rows, img.cols, param<double>("WebNumOutgoing"), &web_);
 
       // web_.coeffRef(index(0, 0, img.cols), index(50, 50, img.cols)) = 1;
       // web_.coeffRef(index(50, 50, img.cols), index(50, 75, img.cols)) = 1;
@@ -501,8 +507,8 @@ namespace asp
       //         dyn.coeffRef(index(y, x + dx, img.cols), idx) = 1;
 
       int idx = 0;
-      int num_outgoing = param<int>("WebNumOutgoing");
-      float max_radius = param<float>("WebMaxRadius");
+      int num_outgoing = param<double>("WebNumOutgoing");
+      float max_radius = param<double>("WebMaxRadius");
       eigen_extensions::UniformSampler uniform;
       for(int y = 0; y < img.rows; ++y) {
               for(int x = 0; x < img.cols; ++x, ++idx) {
