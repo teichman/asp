@@ -1,4 +1,5 @@
 #include <asp/rgbd.h>
+#include <pcl/filters/filter.h>
 #include <pcl/common/distances.h>
 
 namespace asp
@@ -103,6 +104,7 @@ namespace asp
       }
     }
     cv::imwrite(debugBasePath() + ".png", vis);
+    pcl::io::savePCDFileBinary(debugBasePath() + ".pcd", *cloud_);
   }
 
   
@@ -137,11 +139,15 @@ namespace asp
           continue;
       }
 
-      double dist = pcl::euclideanDistance(pcd[indices[i]], center);
+
       //double dist = fabs(pcd[indices[i]].z - center.z); // Rough approximation.
-      double sigma = 0.1; // TODO: Parameterize.
-      weights_[i] = exp(-dist / sigma); 
-      //weights_[i] = 1.0;
+      
+      //double dist = pcl::euclideanDistance(pcd[indices[i]], center);
+      // double sigma = 0.1; // TODO: Parameterize.
+      // weights_[i] = exp(-dist / sigma); 
+
+      weights_[i] = 1.0;
+      
       total_weight += weights_[i];
       mean += pt;
       ++num_valid;
@@ -183,9 +189,9 @@ namespace asp
   }
 
   void OrganizedSurfaceNormalPod::computeNormal(const Cloud& pcd,
-                                                 const Point& pt,
-                                                 const cv::Point2i& img_pt,
-                                                 pcl::Normal* normal)
+                                                const Point& pt,
+                                                const cv::Point2i& img_pt,
+                                                pcl::Normal* normal)
   {
     indices_.clear();
     inliers_.clear();
@@ -264,15 +270,15 @@ namespace asp
     cv::Mat3b vis = visualize(*normals_);
     cv::imwrite(debugBasePath() + ".png", vis);
 
-    // Cloud::ConstPtr pcd = pull<Cloud::ConstPtr>("Cloud");
-    // pcl::PointCloud<pcl::PointXYZRGBNormal> cn;
-    // pcl::concatenateFields(*pcd, *normals_, cn);
-    // if(!cn.empty())
-    //   pcl::io::savePCDFileBinary("debug/" + getRunName() + ".pcd", cn);
-    // else { 
-    //   int retval = system(("touch debug/" + getRunName() + ".pcd").c_str());
-    //   --retval;
-    // }
+    Cloud::ConstPtr pcd = pull<Cloud::ConstPtr>("Cloud");
+    pcl::PointCloud<pcl::PointXYZRGBNormal> cn;
+    pcl::concatenateFields(*pcd, *normals_, cn);
+    std::vector<int> indices;
+    pcl::removeNaNFromPointCloud(cn, cn, indices);
+    pcl::removeNaNNormalsFromPointCloud(cn, cn, indices);
+    
+    if(!cn.empty())
+      pcl::io::savePCDFileBinary(debugBasePath() + ".pcd", cn);
   }
   
 }  // namespace asp

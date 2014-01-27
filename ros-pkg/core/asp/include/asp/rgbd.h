@@ -102,6 +102,29 @@ namespace asp
     int radius_;
   };
 
+  class SurfaceNormalEPG : public EdgePotentialGenerator
+  {
+  public:
+    DECLARE_POD(SurfaceNormalEPG);
+    SurfaceNormalEPG(const std::string& name) :
+      EdgePotentialGenerator(name)
+    {
+      declareInput<Normals::ConstPtr>("Normals");
+      declareInput<cv::Mat1b>("Mask");
+      declareParam<double>("Sigma");
+    }
+
+    void compute();
+    void display() const;
+    
+  protected:
+    double sigma_;
+
+    double computePotential(int idx0, int idx1, Normals::Ptr normals) const;
+    void fillPotentials(int y, int x, int idx);
+  };
+
+  
 }  // namespace asp
 
 #endif // RGBD_H

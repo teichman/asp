@@ -134,7 +134,7 @@ namespace asp
     //! number of edges per node.
     void initializeStorage(double reserve_per_node = 6);
 
-    void writeEdgePotentialVisualization() const;
+    void writeEdgePotentialVisualization(bool white_background = false) const;
   };
 
   class EdgePotentialAggregator : public EdgePotentialGenerator

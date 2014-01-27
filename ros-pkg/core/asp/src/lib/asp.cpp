@@ -223,9 +223,11 @@ namespace asp
     //                         &edge_);
   }
 
-  void EdgePotentialGenerator::writeEdgePotentialVisualization() const
+  void EdgePotentialGenerator::writeEdgePotentialVisualization(bool white_background) const
   {
-    cv::Mat3b img = pull<cv::Mat3b>("Image");
+    cv::Mat3b img = pull<cv::Mat3b>("Image").clone();
+    if(white_background)
+      img = cv::Vec3b(255, 255, 255);
     cv::Mat3b vis = drawEdgeVisualization(img, edge_);
     double minval = std::numeric_limits<double>::max();
     double maxval = -std::numeric_limits<double>::max();
@@ -245,6 +247,9 @@ namespace asp
 
     cout << getName() << ": range of edge weights is " << minval << " to " << maxval << endl;
     string overlay_path = debugBasePath() + ".png";
+    if(white_background)
+      overlay_path = debugBasePath() + "-white_background.png";
+    
     cv::imwrite(overlay_path, vis);
   }
   
@@ -265,6 +270,7 @@ namespace asp
   void EdgePotentialAggregator::debug() const
   {
     writeEdgePotentialVisualization();
+    writeEdgePotentialVisualization(true);
   }
 
   NameMapping EdgePotentialAggregator::generateNameMapping() const

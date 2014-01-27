@@ -25,7 +25,7 @@ Pipeline:
     - Name: OrganizedSurfaceNormalPod
       Type: OrganizedSurfaceNormalPod
       Params:
-        Radius: 3
+        Radius: 5
       Inputs:
         Mask: MaskEntryPoint.Output
         Cloud: DepthMatProjector.Cloud
@@ -37,10 +37,10 @@ Pipeline:
     - Name: EdgeStructureGenerator
       Type: EdgeStructureGenerator
       Params:
-        Grid: False
-        Diagonal: False
-        Web: True
-        WebMaxRadius: 7
+        Grid: True
+        Diagonal: True
+        Web: False
+        WebMaxRadius: 3
         WebNumOutgoing: 3
       Inputs:
         Image: ColorImageEntryPoint.Output
