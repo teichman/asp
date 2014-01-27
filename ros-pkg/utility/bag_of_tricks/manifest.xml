@@ -8,8 +8,12 @@
   <license>BSD</license>
   <review status="unreviewed" notes=""/>
   <url>http://ros.org/wiki/bag_of_tricks</url>
+  <depend package="roscpp"/>
   <depend package="opencv_bleeding"/>
   <depend package="serializable"/>
+  <depend package="timer"/>
+
+  <rosdep name="python-matplotlib"/>
   
   <export>
     <cpp cflags="-I${prefix}/include" lflags="-Wl,-rpath,${prefix}/lib -L${prefix}/lib `rosboost-cfg --lflags thread` -lbag_of_tricks" />

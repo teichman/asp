@@ -10,10 +10,11 @@
   <url>http://ros.org/wiki/serializable</url>
 
   <depend package="yaml_cpp"/>
+  <depend package="agent"/>
   
   <export>
     <cpp cflags="-I${prefix}/include"
-	 lflags="-Wl,-rpath,${prefix}/lib -L${prefix}/lib -lserializable" />
+	 lflags="-Wl,-rpath,${prefix}/lib -L${prefix}/lib -lserializable `rosboost-cfg --lflags system` `rosboost-cfg --lflags filesystem`" />
   </export>
 
 

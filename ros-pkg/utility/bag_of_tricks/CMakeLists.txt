@@ -23,24 +23,20 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 
 #common commands for building c++ executables and libraries
 rosbuild_add_library(${PROJECT_NAME}
-  src/high_res_timer.cpp
   src/image_region_iterator.cpp
-  src/lockable.cpp
+  src/connected_components.cpp
+  src/next_path.cpp
   )
-rosbuild_link_boost(${PROJECT_NAME} thread)
+rosbuild_add_boost_directories()
+rosbuild_link_boost(${PROJECT_NAME} thread filesystem system)
 target_link_libraries(${PROJECT_NAME} rt)
 #target_link_libraries(${PROJECT_NAME} another_library)
-#rosbuild_add_boost_directories()
+
 
 #rosbuild_add_executable(example examples/example.cpp)
 #target_link_libraries(example ${PROJECT_NAME})
 
-
-rosbuild_add_gtest(test_hrt src/test_hrt.cpp)
-rosbuild_add_gtest_build_flags(test_hrt)
-target_link_libraries(test_hrt ${PROJECT_NAME})
-
-rosbuild_add_gtest(test_lockable src/test_lockable.cpp)
-rosbuild_add_gtest_build_flags(test_lockable)
-target_link_libraries(test_lockable ${PROJECT_NAME})
+rosbuild_add_gtest(test_next_path src/test_next_path.cpp)
+rosbuild_add_gtest_build_flags(test_next_path)
+target_link_libraries(test_next_path ${PROJECT_NAME})
 

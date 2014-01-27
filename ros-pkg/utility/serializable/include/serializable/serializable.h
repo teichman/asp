@@ -5,9 +5,11 @@
 #include <fstream>
 #include <assert.h>
 #include <vector>
+#include <queue>
 #include <map>
 #include <yaml-cpp/yaml.h>
 #include <yaml-cpp/node/node.h>
+#include <agent/agent.h>
 
 
 /** \brief @b Serializable is an abstract base class which represents
@@ -38,6 +40,8 @@ public:
   virtual void loadYAML(const std::string& path);
 };
 
+//! Really, this doesn't exist in yaml-cpp?  Seriously?
+void saveYAML(const YAML::Node& doc, const std::string& path);
 
 /* Class for making it easy to use stream constructors.
  * For example, assume OnlineLearner doesn't have a default constructor,
@@ -58,6 +62,48 @@ public:
   
 private:
   std::ifstream ifstream_;
+};
+
+struct SerializableSaveFunction
+{
+  void operator()(const Serializable& obj, const std::string& path) { obj.save(path); }
+};
+
+template<typename T, typename S = SerializableSaveFunction>
+class ThreadedSerializer : public Agent
+{
+public:
+  double delay_;
+  bool verbose_;
+
+  ThreadedSerializer() : delay_(10), verbose_(false) {}
+
+  void push(T obj, const std::string& path)
+  {
+    scopeLockWrite; queue_.push(std::pair<T, std::string>(obj, path));
+  }
+
+  void _run()
+  {
+    S serialize;
+    while(true) {
+      usleep(delay_ * 1e3);
+      scopeLockWrite;
+      if(!queue_.empty()) {
+        serialize(queue_.front().first, queue_.front().second);
+        if(verbose_)
+          std::cout << "[ThreadedSerializer]  Saved to \""
+                    << queue_.front().second << "\"." << std::endl;
+        queue_.pop();
+      }
+
+      if(queue_.empty() && quitting_)
+        break;
+    }
+  }
+  
+protected:
+  std::queue< std::pair<T, std::string> > queue_;
 };
 
 #endif // SERIALIZABLE_H

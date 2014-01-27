@@ -87,5 +87,17 @@ std::vector< boost::shared_ptr<Out> > cast(const std::vector< boost::shared_ptr<
   return cvec;
 }
 
+template<typename Out, typename In>
+std::vector<Out> vectorCast(const std::vector<In>& vec)
+{
+  std::vector<Out> cvec(vec.size());
+  for(size_t i = 0; i < vec.size(); ++i) {
+    assert(vec[i]);
+    cvec[i] = dynamic_cast<Out>(vec[i]);
+    assert(cvec[i]);
+  }
+  return cvec;
+}
+
 
 #endif // BAG_OF_TRICKS_H

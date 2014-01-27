@@ -1,6 +1,8 @@
 #include <serializable/serializable.h>
+#include <boost/filesystem.hpp>
 
 using namespace std;
+namespace bfs = boost::filesystem;
 
 void Serializable::load(const std::string& path)
 {
@@ -16,14 +18,28 @@ void Serializable::load(const std::string& path)
 
 void Serializable::save(const std::string& path) const
 {
+  // -- Get a temporary file to save to.
+  bfs::path p(path);
+  assert(p.has_filename());
+  string tmppath;
+  if(p.has_parent_path())
+    tmppath = p.parent_path().string() + "/";
+  else
+    tmppath = "./";
+  tmppath = tmppath + ".Serializable-" + p.filename().string();
+
+  // -- Write to disk.
   ofstream f;
-  f.open(path.c_str());
+  f.open(tmppath.c_str());
   if(!f.is_open()) {
     cerr << "Failed to open " << path << endl;
     assert(f.is_open());
   }
   serialize(f);
   f.close();
+
+  // -- Move the temporary file to the intended destination.
+  bfs::rename(tmppath, path);
 }
 
 std::ostream& operator<<(std::ostream& out, const Serializable& ser)
@@ -46,22 +62,11 @@ void YAMLizable::loadYAML(const std::string& path)
 
 void YAMLizable::saveYAML(const std::string& path) const
 {
-  ofstream f;
-  f.open(path.c_str());
-  if(!f.is_open()) {
-    cerr << "Failed to open " << path << endl;
-    assert(f.is_open());
-  }
-
-  YAML::Node doc = YAMLize();
-  f << YAML::Dump(doc) << endl;
-  f.close();
+  ::saveYAML(YAMLize(), path);
 }
 
 IfstreamWrapper::IfstreamWrapper(const std::string& path)
 {
-  cout << "Constructing IfstreamWrapper" << endl;
-  
   ifstream_.open(path.c_str());
   if(!ifstream_.is_open()) {
     cerr << "Failed to open " << path << endl;
@@ -71,8 +76,19 @@ IfstreamWrapper::IfstreamWrapper(const std::string& path)
 
 IfstreamWrapper::~IfstreamWrapper()
 {
-  cout << "Destroying IfstreamWrapper." << endl;
-  
   if(ifstream_.is_open())
     ifstream_.close();
+}
+
+void saveYAML(const YAML::Node& doc, const std::string& path)
+{
+  ofstream f;
+  f.open(path.c_str());
+  if(!f.is_open()) {
+    cerr << "Failed to open " << path << endl;
+    assert(f.is_open());
+  }
+  
+  f << YAML::Dump(doc) << endl;
+  f.close();
 }
