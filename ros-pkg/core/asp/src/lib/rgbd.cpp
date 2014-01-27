@@ -142,11 +142,11 @@ namespace asp
 
       //double dist = fabs(pcd[indices[i]].z - center.z); // Rough approximation.
       
-      //double dist = pcl::euclideanDistance(pcd[indices[i]], center);
-      // double sigma = 0.1; // TODO: Parameterize.
-      // weights_[i] = exp(-dist / sigma); 
+      double dist = pcl::euclideanDistance(pcd[indices[i]], center);
+      double sigma = 0.1; // TODO: Parameterize.
+      weights_[i] = exp(-dist / sigma); 
 
-      weights_[i] = 1.0;
+      //weights_[i] = 1.0;
       
       total_weight += weights_[i];
       mean += pt;

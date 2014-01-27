@@ -25,7 +25,7 @@ Pipeline:
     - Name: OrganizedSurfaceNormalPod
       Type: OrganizedSurfaceNormalPod
       Params:
-        Radius: 5
+        Radius: 10
       Inputs:
         Mask: MaskEntryPoint.Output
         Cloud: DepthMatProjector.Cloud
