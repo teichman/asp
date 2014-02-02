@@ -23,7 +23,6 @@ public:
     oni_(color_res, depth_res),
     asp_(num_threads, config)
   {
-    asp_.setDebug(true);
     asp_.setModel(asp_.defaultModel());
     asp_.writeGraphviz("graphviz");
   }
@@ -52,6 +51,12 @@ public:
       asp_.setInput("DepthMatEntryPoint", depth);
       asp_.setInput("MaskEntryPoint", cv::Mat1b(color.size(), 255));
       asp_.setInput("SeedEntryPoint", cv::Mat1b(color.size(), 127));
+
+      asp_.setDebug(false);
+      asp_.compute();
+      cout << asp_.reportTiming() << endl;
+
+      asp_.setDebug(true);
       asp_.compute();
       cout << "Done." << endl;
     }

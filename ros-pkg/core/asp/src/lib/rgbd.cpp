@@ -248,9 +248,9 @@ namespace asp
     }
     
     ROS_ASSERT(p.normal[0] <= 1.0 && p.normal[0] >= -1.0);
-    c[0] = fabs(p.normal[0]) * 255;
-    c[1] = fabs(p.normal[1]) * 255;
-    c[2] = fabs(p.normal[2]) * 255;
+    c[0] = max<int>(0, (p.normal[0] + 1.0) / 2.0 * 255);
+    c[1] = max<int>(0, (p.normal[1] + 1.0) / 2.0 * 255);
+    c[2] = max<int>(0, (p.normal[2] + 1.0) / 2.0 * 255);
   }
 
   cv::Mat3b OrganizedSurfaceNormalPod::visualize(const Normals& normals) const
