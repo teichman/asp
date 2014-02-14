@@ -437,6 +437,9 @@ namespace asp
   void SeedNPG::debug() const
   {
     writeNodePotentialVisualization();
+    cv::Mat3b img = pull<cv::Mat3b>("Image");
+    string path = debugBasePath() + "-original_image.png";
+    cv::imwrite(path, img);
   }
 
   void PriorNPG::compute()

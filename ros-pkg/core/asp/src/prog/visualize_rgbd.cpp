@@ -56,9 +56,13 @@ public:
       asp_.compute();
       cout << asp_.reportTiming() << endl;
 
-      asp_.setDebug(true);
-      asp_.compute();
-      cout << "Done." << endl;
+      // asp_.setDebug(true);
+      // asp_.compute();
+      // cout << "Done." << endl;
+
+      const Normals& normals = *asp_.pull<Normals::ConstPtr>("OrganizedSurfaceNormalPod", "Normals");
+      cv::Mat3b vis = asp_.pod<OrganizedSurfaceNormalPod>()->visualize(normals);
+      cv::imshow("Normals", vis);
     }
     else if(key == 'q') {
       oni_.stop();
