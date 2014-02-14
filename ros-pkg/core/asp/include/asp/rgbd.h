@@ -85,19 +85,20 @@ namespace asp
     void computeNormal(const Cloud& depth,
                        const Point& center,
                        const std::vector<int>& indices,
-                       pcl::Normal* normal);
+                       pcl::Normal* normal,
+                       std::vector<bool>* valid,
+                       std::vector<float>* weights);
     void computeNormal(const Cloud& depth,
                        const Point& pt,
                        const cv::Point2i& img_pt,
-                       pcl::Normal* normal);
+                       pcl::Normal* normal,
+                       std::vector<int>* indices,
+                       std::vector<bool>* valid,
+                       std::vector<float>* weights);
     void normalToColor(const pcl::Normal& normal,
                        cv::Vec3b* color) const;
 
     Normals::Ptr normals_;
-    std::vector<int> indices_;
-    std::vector<int> inliers_;
-    std::vector<bool> valid_;
-    std::vector<float> weights_;
     pcl::NormalEstimation<Point, pcl::Normal> normal_estimator_;
     int radius_;
   };

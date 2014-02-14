@@ -115,17 +115,20 @@ namespace asp
   void OrganizedSurfaceNormalPod::computeNormal(const Cloud& pcd,
                                                 const Point& center,
                                                 const std::vector<int>& indices,
-                                                pcl::Normal* normal)
+                                                pcl::Normal* normal,
+                                                std::vector<bool>* valid,
+                                                std::vector<float>* weights)
   {
+    
     // TODO:  This method could probably be made substantially better by using RANSAC.  This would help prevent the
     // "blurry" surface normals at edges, which is really what we're after.  Sounds expensive, but there are
     // probably some tricks one could do to bring the cost down.  See 2013-11-20 notes.
     
-    weights_.clear();
-    weights_.resize(indices.size(), 0);
+    weights->clear();
+    weights->resize(indices.size(), 0);
     double total_weight = 0;
-    valid_.clear();
-    valid_.resize(indices.size(), true);
+    valid->clear();
+    valid->resize(indices.size(), true);
 
     // HighResTimer hrt("OrganizedSurfaceNormalPod: weighting");
     // hrt.start();
@@ -135,7 +138,7 @@ namespace asp
     for(size_t i = 0; i < indices.size(); ++i) {
       const Vector3f& pt = pcd[indices[i]].getVector3fMap();
       if(isnan(pt(0)) || isnan(pt(1)) || isnan(pt(2))) {
-        valid_[i] = false;
+        (*valid)[i] = false;
           continue;
       }
 
@@ -144,11 +147,9 @@ namespace asp
       
       double dist = pcl::euclideanDistance(pcd[indices[i]], center);
       double sigma = 0.1; // TODO: Parameterize.
-      weights_[i] = exp(-dist / sigma); 
+      (*weights)[i] = exp(-dist / sigma); 
 
-      //weights_[i] = 1.0;
-      
-      total_weight += weights_[i];
+      total_weight += (*weights)[i];
       mean += pt;
       ++num_valid;
     }
@@ -156,8 +157,8 @@ namespace asp
     
     // -- Normalize the weights.  - This is only necessary if there are numerical issues
     // or if we want valid curvature estimates.
-    for(size_t i = 0; i < weights_.size(); ++i)
-      weights_[i] /= total_weight;
+    for(size_t i = 0; i < weights->size(); ++i)
+      (*weights)[i] /= total_weight;
 
     // hrt.stop();
     // cout << hrt.report() << endl;
@@ -166,10 +167,10 @@ namespace asp
     // hrt.start();
     Matrix3f X = Matrix3f::Zero();
     for(size_t i = 0; i < indices.size(); ++i) {
-      if(!valid_[i])
+      if(!(*valid)[i])
         continue;
-      Vector3f pt = weights_[i] * (pcd[indices[i]].getVector3fMap() - center.getVector3fMap());
-      //Vector3f pt = weights_[i] * (pcd[indices[i]].getVector3fMap() - mean);
+      Vector3f pt = (*weights)[i] * (pcd[indices[i]].getVector3fMap() - center.getVector3fMap());
+      //Vector3f pt = (*weights)[i] * (pcd[indices[i]].getVector3fMap() - mean);
       X += pt * pt.transpose();
     }
 
@@ -191,10 +192,14 @@ namespace asp
   void OrganizedSurfaceNormalPod::computeNormal(const Cloud& pcd,
                                                 const Point& pt,
                                                 const cv::Point2i& img_pt,
-                                                pcl::Normal* normal)
+                                                pcl::Normal* normal,
+                                                std::vector<int>* indices,
+                                                std::vector<bool>* valid,
+                                                std::vector<float>* weights)
   {
-    indices_.clear();
-    inliers_.clear();
+    indices->clear();
+    valid->clear();
+    weights->clear();
     
     ImageRegionIterator it(cv::Size(pcd.width, pcd.height), radius_);
     for(it.setCenter(img_pt); !it.done(); ++it) {
@@ -205,10 +210,10 @@ namespace asp
       if(isnan(pcd[idx].z))
         continue;
 
-      indices_.push_back(it.index());
+      indices->push_back(it.index());
     }
 
-    computeNormal(pcd, pt, indices_, normal);
+    computeNormal(pcd, pt, *indices, normal, valid, weights);
   }
   
   void OrganizedSurfaceNormalPod::compute()
@@ -217,21 +222,26 @@ namespace asp
     Cloud::ConstPtr pcd = pull<Cloud::ConstPtr>("Cloud");
     radius_ = param<double>("Radius");
 
-    indices_.clear();
-    inliers_.clear();
     normals_->clear();
     normals_->height = pcd->height;
     normals_->width = pcd->width;
     normals_->is_dense = false;
     normals_->resize(pcd->size());
 
+    #pragma omp parallel for
     for(size_t y = 0; y < pcd->height; ++y) {
+      vector<int> indices;
+      vector<bool> valid;
+      vector<float> weights;
+      indices.reserve(1e3);
+      valid.reserve(1e3);
+      weights.reserve(1e3);
       for(size_t x = 0; x < pcd->width; ++x) {
         if(mask(y, x) != 255)
           continue;
         int idx = y * pcd->width + x;
         cv::Point2i img_pt(x, y);
-        computeNormal(*pcd, pcd->at(idx), img_pt, &normals_->at(idx));
+        computeNormal(*pcd, pcd->at(idx), img_pt, &normals_->at(idx), &indices, &valid, &weights);
       }
     }
 
