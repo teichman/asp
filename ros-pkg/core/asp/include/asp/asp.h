@@ -50,6 +50,7 @@ namespace asp
     //! Initializes pipeline_ with NodePotentialAggregator, EdgePotentialAggregator, 
     //! and GraphCuts pods.  You then hook up your own things to this.
     void initializePipeline();
+    void registerPodTypes();
   };
 
   // Unweighted node potentials should be in [-1, 1].

@@ -15,6 +15,8 @@ namespace asp
   typedef pcl::PointCloud<Point> Cloud;
   typedef pcl::PointCloud<pcl::Normal> Normals;
 
+  void registerPodTypesRGBD();
+  
   //! "Projective" point comes from the OpenNI terminology, and refers to (u, v, z), i.e.
   //! pixel id and depth value.  Here I've added color, too, so that this represents everything
   //! that is known about a pixel in an RBGD camera.
@@ -103,27 +105,31 @@ namespace asp
     int radius_;
   };
 
-  class SurfaceNormalEPG : public EdgePotentialGenerator
-  {
-  public:
-    DECLARE_POD(SurfaceNormalEPG);
-    SurfaceNormalEPG(const std::string& name) :
-      EdgePotentialGenerator(name)
-    {
-      declareInput<Normals::ConstPtr>("Normals");
-      declareInput<cv::Mat1b>("Mask");
-      declareParam<double>("Sigma");
-    }
+  // class SurfaceNormalEPG : public EdgePotentialGenerator
+  // {
+  // public:
+  //   DECLARE_POD(SurfaceNormalEPG);
+  //   SurfaceNormalEPG(const std::string& name) :
+  //     EdgePotentialGenerator(name)
+  //   {
+  //     declareInput<Normals::ConstPtr>("Normals");
+  //     declareInput<cv::Mat1b>("Mask");
+  //     declareParam<double>("Sigma");
+  //   }
 
-    void compute();
-    void display() const;
+  //   ~SurfaceNormalEPG() {}
+  //   void compute();
+  //   void display() const;
+  //   void debug() const {}
+
+
     
-  protected:
-    double sigma_;
+  // protected:
+  //   double sigma_;
 
-    double computePotential(int idx0, int idx1, Normals::Ptr normals) const;
-    void fillPotentials(int y, int x, int idx);
-  };
+  //   double computePotential(int idx0, int idx1, Normals::Ptr normals) const;
+  //   void fillPotentials(int y, int x, int idx);
+  // };
 
   
 }  // namespace asp

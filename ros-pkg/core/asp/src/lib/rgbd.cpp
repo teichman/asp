@@ -8,6 +8,13 @@ namespace asp
   using namespace pl;
   using namespace Eigen;
 
+  void registerPodTypesRGBD()
+  {
+    REGISTER_POD(DepthMatProjector);
+    REGISTER_POD(OrganizedSurfaceNormalPod);
+    //REGISTER_POD(SurfaceNormalEPG);
+  }
+  
   void ProjectivePoint::serialize(std::ostream& out) const
   {
     out << setprecision(16) << u_ << " " << v_ << " " << z_

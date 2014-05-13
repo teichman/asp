@@ -15,24 +15,40 @@ namespace asp
   Asp::Asp(int num_threads) :
     Pipeline(num_threads)
   {
-    addPod(new EntryPoint<cv::Mat1b>("MaskEntryPoint"));
-    addPod(new EntryPoint<cv::Mat3b>("ImageEntryPoint"));
-    addPod(new EntryPoint<cv::Mat1b>("SeedEntryPoint"));
-    addPod(new NodePotentialAggregator("NodePotentialAggregator"));
-    addPod(new EdgePotentialAggregator("EdgePotentialAggregator"));
-    connect("ImageEntryPoint.Output -> NodePotentialAggregator.Image");
-    connect("ImageEntryPoint.Output -> EdgePotentialAggregator.Image");
-    addPod(new GraphcutsPod("GraphcutsPod"));
-    connect("NodePotentialAggregator.Node -> GraphcutsPod.AggregatedNodePotentials");
-    connect("EdgePotentialAggregator.Edge -> GraphcutsPod.AggregatedEdgePotentials");
-    connect("ImageEntryPoint.Output -> GraphcutsPod.Image");
-    addPod(new SeedNPG("SeedNPG"));
-    connect("ImageEntryPoint.Output -> SeedNPG.Image");
-    connect("SeedEntryPoint.Output -> SeedNPG.SeedImage");
-    connect("SeedNPG.Node -> NodePotentialAggregator.UnweightedNode");
-    addPod(new PriorNPG("PriorNPG"));
-    connect("ImageEntryPoint.Output -> PriorNPG.Image");
-    connect("PriorNPG.Node -> NodePotentialAggregator.UnweightedNode");
+    registerPodTypes();
+    
+    createPod("EntryPoint<cv::Mat1b>", "MaskEntryPoint");
+    createPod("EntryPoint<cv::Mat3b>", "ImageEntryPoint");
+    createPod("EntryPoint<cv::Mat1b>", "SeedEntryPoint");
+    createPod("NodePotentialAggregator", "NodePotentialAggregator");
+    createPod("EdgePotentialAggregator", "EdgePotentialAggregator");
+    connect("NodePotentialAggregator.Image <- ImageEntryPoint.Output");
+    connect("EdgePotentialAggregator.Image <- ImageEntryPoint.Output");
+    createPod("GraphcutsPod", "GraphcutsPod");
+    connect("GraphcutsPod.AggregatedNodePotentials <- NodePotentialAggregator.Node");
+    connect("GraphcutsPod.AggregatedEdgePotentials <- EdgePotentialAggregator.Edge");
+    connect("GraphcutsPod.Image <- ImageEntryPoint.Output");
+    createPod("SeedNPG", "SeedNPG");
+    connect("SeedNPG.Image <- ImageEntryPoint.Output");
+    connect("SeedNPG.SeedImage <- SeedEntryPoint.Output");
+    connect("NodePotentialAggregator.UnweightedNode <- SeedNPG.Node");
+    createPod("PriorNPG", "PriorNPG");
+    connect("PriorNPG.Image <- ImageEntryPoint.Output");
+    connect("NodePotentialAggregator.UnweightedNode <- PriorNPG.Node");
+  }
+
+  void Asp::registerPodTypes()
+  {
+    REGISTER_POD_TEMPLATE(EntryPoint, cv::Mat3b);
+    REGISTER_POD_TEMPLATE(EntryPoint, cv::Mat1b);
+    REGISTER_POD(NodePotentialAggregator);
+    REGISTER_POD(EdgePotentialAggregator);
+    REGISTER_POD(EdgeStructureGenerator);
+    REGISTER_POD(GraphcutsPod);
+    REGISTER_POD(SeedNPG);
+    REGISTER_POD(PriorNPG);
+    REGISTER_POD(SmoothnessEPG);
+    REGISTER_POD(SimpleColorDifferenceEPG);
   }
 
   Asp::Asp(int num_threads, YAML::Node config) :
@@ -173,8 +189,17 @@ namespace asp
 
   void NodePotentialAggregator::fillModel(Model* model) const
   {
-    model->applyNameMapping("nmap", generateNameMapping());
     model->nweights_ = nweights_;
+    
+    // Generate nmap.  We're going to strip out the outlet name here
+    // since each node potential generator can produce only one
+    // node potential.
+    vector<string> names = generateNameMapping().names();
+    string cruft = ".Node";
+    NameMapping nmap;
+    for(size_t i = 0; i < names.size(); ++i)
+      nmap.addName(names[i].substr(0, names[i].size() - cruft.size()));
+    model->applyNameMapping("nmap", nmap);
   }
 
   void NodePotentialAggregator::fillPotentialsCache(PotentialsCache* pc) const
@@ -245,7 +270,7 @@ namespace asp
       ROS_ASSERT(minval >= 0);
     }
 
-    cout << getName() << ": range of edge weights is " << minval << " to " << maxval << endl;
+    cout << name() << ": range of edge weights is " << minval << " to " << maxval << endl;
     string overlay_path = debugBasePath() + ".png";
     if(white_background)
       overlay_path = debugBasePath() + "-white_background.png";
@@ -296,8 +321,17 @@ namespace asp
 
   void EdgePotentialAggregator::fillModel(Model* model) const
   {
-    model->applyNameMapping("emap", generateNameMapping());
     model->eweights_ = eweights_;
+
+    // Generate emap.  We're going to strip out the outlet name here
+    // since each node potential generator can produce only one
+    // node potential.
+    vector<string> names = generateNameMapping().names();
+    string cruft = ".Edge";
+    NameMapping emap;
+    for(size_t i = 0; i < names.size(); ++i)
+      emap.addName(names[i].substr(0, names[i].size() - cruft.size()));
+    model->applyNameMapping("emap", emap);
   }
 
   void EdgePotentialAggregator::fillPotentialsCache(PotentialsCache* pc) const
@@ -469,28 +503,28 @@ namespace asp
     if(param<bool>("Grid")) {
       int idx = 0;
       for(int y = 0; y < img.rows; ++y) {
-              for(int x = 0; x < img.cols; ++x, ++idx) {
+        for(int x = 0; x < img.cols; ++x, ++idx) {
           if(mask(y, x) == 0)
             continue;
           if(x < img.cols - 1)
-                  structure_.insert(idx, index(y, x + 1, img.cols)) = 1;
-                if(y < img.rows - 1)
-                  structure_.insert(idx, index(y + 1, x, img.cols)) = 1;
-              }
+            structure_.insert(idx, index(y, x + 1, img.cols)) = 1;
+          if(y < img.rows - 1)
+            structure_.insert(idx, index(y + 1, x, img.cols)) = 1;
+        }
       }
     }
     if(param<bool>("Diagonal")) {
       initializeSparseMat(img.rows, img.cols, 4, &diag_);
       int idx = 0;
       for(int y = 0; y < img.rows - 1; ++y) {
-              for(int x = 0; x < img.cols; ++x, ++idx) {
+        for(int x = 0; x < img.cols; ++x, ++idx) {
           if(mask(y, x) == 0)
             continue;
           if(x > 0)
             diag_.insert(idx, index(y + 1, x - 1, img.cols)) = 1;
           if(x < img.cols - 1)
             diag_.insert(idx, index(y + 1, x + 1, img.cols)) = 1;
-              }
+        }
       }
       structure_ += diag_;
     }
@@ -520,36 +554,39 @@ namespace asp
       float max_radius = param<double>("WebMaxRadius");
       eigen_extensions::UniformSampler uniform;
       for(int y = 0; y < img.rows; ++y) {
-              for(int x = 0; x < img.cols; ++x, ++idx) {
+        for(int x = 0; x < img.cols; ++x, ++idx) {
           if(mask(y, x) == 0)
             continue;
           
-          int num = 0;
-                while(num < num_outgoing) {
-                  double radius = uniform.sample() * max_radius;
-                  double theta = uniform.sample() * 2 * M_PI;
-                  int dx = radius * cos(theta);
-                  int dy = radius * sin(theta);
-                  int x0 = x + dx;
-                  int y0 = y + dy;
-                  if(y0 < 0 || y0 >= img.rows || x0 < 0 ||
+          int num_edges = 0;
+          int num_attempts = 0;
+          int max_num_attempts = 20;
+          while(num_edges < num_outgoing && num_attempts < max_num_attempts) {
+            ++num_attempts;
+            double radius = uniform.sample() * max_radius;
+            double theta = uniform.sample() * 2 * M_PI;
+            int dx = radius * cos(theta);
+            int dy = radius * sin(theta);
+            int x0 = x + dx;
+            int y0 = y + dy;
+            if(y0 < 0 || y0 >= img.rows || x0 < 0 ||
                x0 >= img.cols || (dx == 0 && dy == 0) ||
                mask(y0, x0) == 0)
             {
-                    continue;
+              continue;
             }
 
-                  //cout << "radius: " << radius << ", theta: " << theta << ", dx: " << dx << ", dy: " << dy << endl;
+            //cout << "radius: " << radius << ", theta: " << theta << ", dx: " << dx << ", dy: " << dy << endl;
             
-                  int idx0 = index(y0, x0, img.cols);
-                  if(idx < idx0)
-                    web_.coeffRef(idx, idx0) = 1;
-                  else
-                    web_.coeffRef(idx0, idx) = 1;
+            int idx0 = index(y0, x0, img.cols);
+            if(idx < idx0)
+              web_.coeffRef(idx, idx0) = 1;
+            else
+              web_.coeffRef(idx0, idx) = 1;
 
-            ++num;
-                }
-              }
+            ++num_edges;
+          }
+        }
       }
 
       structure_ += web_;

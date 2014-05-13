@@ -47,10 +47,10 @@ public:
 
     if(key == ' ') {
       cout << "Segmenting" << endl;
-      asp_.setInput("ColorImageEntryPoint", color);
-      asp_.setInput("DepthMatEntryPoint", depth);
-      asp_.setInput("MaskEntryPoint", cv::Mat1b(color.size(), 255));
-      asp_.setInput("SeedEntryPoint", cv::Mat1b(color.size(), 127));
+      asp_.push("ColorImageEntryPoint", color);
+      asp_.push("DepthMatEntryPoint", depth);
+      asp_.push("MaskEntryPoint", cv::Mat1b(color.size(), 255));
+      asp_.push("SeedEntryPoint", cv::Mat1b(color.size(), 127));
 
       asp_.setDebug(false);
       asp_.compute();
