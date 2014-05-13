@@ -26,20 +26,20 @@ namespace gc
     ROS_ASSERT(!hasNameMapping("nmap") || nweights_.rows() == (int)nameMapping("nmap").size());
     ROS_ASSERT(!hasNameMapping("emap") || eweights_.rows() == (int)nameMapping("emap").size());
     
-    out << "Graphcuts Model v0.1" << endl;
+    out << "Graphcuts Model v0.2" << endl;
     out << "== " << nweights_.rows() << " node potential weights == " << endl;
     for(int i = 0; i < nweights_.rows(); ++i)
-      out << nameMapping("nmap").toName(i) << "\t" << setprecision(16) << nweights_(i) << endl;
+      out << fixed << right << setw(32) << setprecision(16) << nweights_(i) << "     " << nameMapping("nmap").toName(i) << endl;
     out << "== " << eweights_.rows() << " edge potential weights == " << endl;
     for(int i = 0; i < eweights_.rows(); ++i)
-      out << nameMapping("emap").toName(i) << "\t" << setprecision(16) << eweights_(i) << endl;
+      out << fixed << right << setw(32) << setprecision(16) << eweights_(i) << "     " << nameMapping("emap").toName(i) << endl;
   }
   
   void Model::deserialize(std::istream& in)
   {    
     string buf;
     getline(in, buf);
-    ROS_ASSERT(buf.compare("Graphcuts Model v0.1") == 0);
+    ROS_ASSERT(buf.compare("Graphcuts Model v0.2") == 0);
 
     in >> buf;
     int num_node;
@@ -48,8 +48,8 @@ namespace gc
     vector<string> nnames(num_node);
     VectorXd nweights(num_node);
     for(int i = 0; i < num_node; ++i) {
-      in >> nnames[i];
       in >> nweights(i);
+      in >> nnames[i];
     }
     NameMapping nmap;
     nmap.addNames(nnames);
@@ -63,8 +63,8 @@ namespace gc
     vector<string> enames(num_edge);
     VectorXd eweights(num_edge);
     for(int i = 0; i < num_edge; ++i) {
-      in >> enames[i];
       in >> eweights(i);
+      in >> enames[i];
     }
     NameMapping emap;
     emap.addNames(enames);

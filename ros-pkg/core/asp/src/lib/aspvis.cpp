@@ -147,6 +147,7 @@ namespace asp
     asp_->compute();
     cout << asp_->reportTiming() << endl;
 
+    asp_->setDebug(false);
     asp_->segment(&seg_);
     needs_redraw_ = true;
   }
