@@ -36,13 +36,26 @@ int main(int argc, char** argv)
   cv::Mat3b img = cv::imread(opts["img"].as<string>());
   Asp asp(1);
   generateSimpleSegmentationPipeline(&asp);
-  if(opts.count("default-model"))
+
+  string graphviz_path = "graphviz";
+  cout << "Wrote graphviz to \"" << graphviz_path << "\"." << endl;
+  asp.writeGraphviz(graphviz_path);
+  
+  if(opts.count("default-model")) {
+    cout << "Default model: " << endl;
+    cout << asp.defaultModel() << endl;
+    cout << endl;
     asp.setModel(asp.defaultModel());
+  }
   else if(opts.count("model")) {
     Model model;
     model.load(opts["model"].as<string>());
     asp.setModel(model);
   }
+  cout << endl;
+  cout << "Using model: " << endl;
+  cout << asp.model() << endl;
+  
   AspVis vis(&asp, img, opts["scale"].as<double>(), opts["savedir"].as<string>());
   vis.run();
 

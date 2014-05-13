@@ -16,12 +16,23 @@ namespace eigen_extensions
     virtual ~Sampler() {}
     virtual double sample() = 0;
   };
-  
+
+  // Generates values between 0 and mt19937.max().
   class UniformSampler
   {
   public:
     UniformSampler(uint64_t seed = 0);
     uint64_t sample();
+    
+  protected:
+    std::tr1::mt19937 mersenne_;
+  };
+
+  class Uniform01Sampler
+  {
+  public:
+    Uniform01Sampler(uint64_t seed = 0);
+    double sample();
     
   protected:
     std::tr1::mt19937 mersenne_;

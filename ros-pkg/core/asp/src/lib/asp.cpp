@@ -168,38 +168,35 @@ namespace asp
   NameMapping NodePotentialAggregator::generateNameMapping() const
   {
     vector<string> names = upstreamOutputNames("UnweightedNode");
+    string cruft = ".Node";
     NameMapping nmap;
-    nmap.addNames(names);
+    for(size_t i = 0; i < names.size(); ++i)
+      nmap.addName(names[i].substr(0, names[i].size() - cruft.size()));
+
     return nmap;
   }
   
   void NodePotentialAggregator::setWeights(Model model)
   {
-    // Make the numbers in model match up with what we have here.
+    // The model must have the correct number of weights otherwise 
+    // this makes no sense.
     NameMapping nmap = generateNameMapping();
     ROS_ASSERT(nmap.size() == (size_t)model.nweights_.rows());
-    model.applyNameMapping("nmap", generateNameMapping());
 
-    vector<string> names = upstreamOutputNames("UnweightedNode");
-    for(size_t i = 0; i < names.size(); ++i)
-      ROS_ASSERT(names[i] == model.nameMapping("nmap").toName(i));
-  
+    // Check that the model has the same set of node potentials.
+    for(size_t i = 0; i < nmap.size(); ++i)
+      model.nameMapping("nmap").hasName(nmap.toName(i));
+    
+    // Make the numbers in the model have the same ordering as the
+    // node potentials in this aggregator.  Apply them.
+    model.applyNameMapping("nmap", nmap);
     nweights_ = model.nweights_;
   }
 
   void NodePotentialAggregator::fillModel(Model* model) const
-  {
+  {        
+    model->applyNameMapping("nmap", generateNameMapping());
     model->nweights_ = nweights_;
-    
-    // Generate nmap.  We're going to strip out the outlet name here
-    // since each node potential generator can produce only one
-    // node potential.
-    vector<string> names = generateNameMapping().names();
-    string cruft = ".Node";
-    NameMapping nmap;
-    for(size_t i = 0; i < names.size(); ++i)
-      nmap.addName(names[i].substr(0, names[i].size() - cruft.size()));
-    model->applyNameMapping("nmap", nmap);
   }
 
   void NodePotentialAggregator::fillPotentialsCache(PotentialsCache* pc) const
@@ -300,38 +297,36 @@ namespace asp
 
   NameMapping EdgePotentialAggregator::generateNameMapping() const
   {
+    vector<string> names = upstreamOutputNames("UnweightedEdge");
+    string cruft = ".Edge";
     NameMapping emap;
-    emap.addNames(upstreamOutputNames("UnweightedEdge"));
+    for(size_t i = 0; i < names.size(); ++i)
+      emap.addName(names[i].substr(0, names[i].size() - cruft.size()));
+    
     return emap;
   }
 
   void EdgePotentialAggregator::setWeights(Model model)
   {
-    // Make the numbers in model match up with what we have here.
+    // The model must have the correct number of weights otherwise 
+    // this makes no sense.
     NameMapping emap = generateNameMapping();
     ROS_ASSERT(emap.size() == (size_t)model.eweights_.rows());
-    model.applyNameMapping("emap", generateNameMapping());
 
-    vector<string> names = upstreamOutputNames("UnweightedEdge");
-    for(size_t i = 0; i < names.size(); ++i)
-      ROS_ASSERT(names[i] == model.nameMapping("emap").toName(i));
-  
+    // Check that the model has the same set of edge potentials.
+    for(size_t i = 0; i < emap.size(); ++i)
+      model.nameMapping("emap").hasName(emap.toName(i));
+    
+    // Make the numbers in the model have the same ordering as the
+    // edge potentials in this aggregator.  Apply them.
+    model.applyNameMapping("emap", emap);
     eweights_ = model.eweights_;
   }
 
   void EdgePotentialAggregator::fillModel(Model* model) const
   {
+    model->applyNameMapping("emap", generateNameMapping());
     model->eweights_ = eweights_;
-
-    // Generate emap.  We're going to strip out the outlet name here
-    // since each node potential generator can produce only one
-    // node potential.
-    vector<string> names = generateNameMapping().names();
-    string cruft = ".Edge";
-    NameMapping emap;
-    for(size_t i = 0; i < names.size(); ++i)
-      emap.addName(names[i].substr(0, names[i].size() - cruft.size()));
-    model->applyNameMapping("emap", emap);
   }
 
   void EdgePotentialAggregator::fillPotentialsCache(PotentialsCache* pc) const
@@ -552,7 +547,7 @@ namespace asp
       int idx = 0;
       int num_outgoing = param<double>("WebNumOutgoing");
       float max_radius = param<double>("WebMaxRadius");
-      eigen_extensions::UniformSampler uniform;
+      eigen_extensions::Uniform01Sampler uniform;
       for(int y = 0; y < img.rows; ++y) {
         for(int x = 0; x < img.cols; ++x, ++idx) {
           if(mask(y, x) == 0)
@@ -560,7 +555,7 @@ namespace asp
           
           int num_edges = 0;
           int num_attempts = 0;
-          int max_num_attempts = 20;
+          int max_num_attempts = num_outgoing * 2;
           while(num_edges < num_outgoing && num_attempts < max_num_attempts) {
             ++num_attempts;
             double radius = uniform.sample() * max_radius;
@@ -573,10 +568,12 @@ namespace asp
                x0 >= img.cols || (dx == 0 && dy == 0) ||
                mask(y0, x0) == 0)
             {
+              // cout << "Edge from (" << x << ", " << y << ") to (" << x0 << ", " << y0 << ") is invalid.";
+              // cout << "  Size: " << img.cols << " x " << img.rows << ".  radius: " << radius << ", theta: " << theta << endl;
               continue;
             }
-
-            //cout << "radius: " << radius << ", theta: " << theta << ", dx: " << dx << ", dy: " << dy << endl;
+            // cout << "*** Edge from (" << x << ", " << y << ") to (" << x0 << ", " << y0 << ") is valid." << endl;
+            // cout << "radius: " << radius << ", theta: " << theta << ", dx: " << dx << ", dy: " << dy << endl;
             
             int idx0 = index(y0, x0, img.cols);
             if(idx < idx0)

@@ -16,6 +16,16 @@ namespace eigen_extensions
     return mersenne_();
   }
 
+  Uniform01Sampler::Uniform01Sampler(uint64_t seed) :
+    mersenne_(seed)
+  {
+  }
+
+  double Uniform01Sampler::sample()
+  {
+    return (double)mersenne_() / (mersenne_.max());
+  }
+
   GaussianSampler::GaussianSampler(double mean, double stdev, uint64_t seed) :
     Sampler(),
     mersenne_(seed),
