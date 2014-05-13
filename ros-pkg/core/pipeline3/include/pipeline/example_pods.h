@@ -1,7 +1,7 @@
 #ifndef EXAMPLE_PODS_H
 #define EXAMPLE_PODS_H
 
-#include <pipeline/pod.h>
+#include <pipeline/pipeline.h>
 
 namespace pl
 {
@@ -12,7 +12,7 @@ namespace pl
     {
     public:
       typedef boost::shared_ptr<Vec> Ptr;
-      typedef boost::shared_ptr<Vec> ConstPtr;
+      typedef boost::shared_ptr<const Vec> ConstPtr;
       Vec() {}
       Vec(size_t num) : std::vector<double>(num)
       {
@@ -169,7 +169,13 @@ namespace pl
 
       void compute();
     };
-      
+
+    void generateDefaultPipeline(Pipeline* pl);
+    void registerPods();
+    Vec::Ptr generateVec(int num_points);
+    double sample();
+    std::ostream& operator<<(std::ostream& out, const std::vector<double>& vec);
+    bool isRequired(Pod* pod);    
   } 
 }
 

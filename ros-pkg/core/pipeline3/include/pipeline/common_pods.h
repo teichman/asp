@@ -21,7 +21,7 @@ namespace pl
     void compute()
     {
       // if(!has_data_)
-      //         PL_ABORT(getClassName() << " \"" << getName() << "\" was not given data before start of Pipeline computation.  See Pipeline::setInput.");
+      //         PL_ABORT(getClassName() << " \"" << name() << "\" was not given data before start of Pipeline computation.  See Pipeline::push.");
 
       // It's probably better to allow an EntryPoint to not get input data and let everything else proceed.
       // If a downstream Pod depends on having this data, it will fail as soon as it pulls, so there's

@@ -7,7 +7,8 @@
 #include <map>
 #include <assert.h>
 
-#define BOOST_FILESYSTEM_VERSION 2
+// Version 2 is no longer supported by the odroid ubuntu 13.10 version of boost
+#define BOOST_FILESYSTEM_VERSION 3
 #include <boost/filesystem.hpp>
 //#include <opencv2/core/core_c.h>
 #include <opencv2/core/core.hpp>

@@ -10,120 +10,58 @@ using namespace pl;
 using namespace pl::example;
 using namespace std;
 
-ostream& operator<<(ostream& out, const std::vector<double>& vec)
+TEST(Pipeline, RemovePodNames)
 {
-  out << "Vec: ";
-  for(size_t i = 0; i < vec.size(); ++i) 
-    out << " " << vec[i];
-  return out;
+  registerPods();
+  Pipeline pl(1);
+  generateDefaultPipeline(&pl);
+  cout << pl.pod("DescriptorAssembler")->getUniqueString() << endl;
 }
 
-double sample()
+TEST(Pipeline, hasParent)
 {
-  double val = 0;
-  for(int i = 0; i < 12; ++i) {
-    val += ((double)rand() / (double)RAND_MAX) * 2.0 - 1.0;
+  registerPods();
+  Pipeline pl(1);
+  generateDefaultPipeline(&pl);
+  vector<Sorter*> sorters = pl.filterPods<Sorter>();
+  for(size_t i = 0; i < sorters.size(); ++i) { 
+    EXPECT_TRUE(sorters[i]->hasParent< EntryPoint< boost::shared_ptr<const Vec> > >());
+    EXPECT_TRUE(!sorters[i]->hasParent<Aggregator>());
   }
-  val /= 2.0;
-  return val;
 }
 
-Vec::Ptr generateVec(int num_points)
+bool immune(Pod* pod)
 {
-  Vec::Ptr vec(new Vec(num_points));
-  for(size_t i = 0; i < vec->size(); ++i)
-    vec->at(i) = sample();
+  if(pod->isPodType< EntryPoint< boost::shared_ptr<const Vec> > >())
+    return true;
+  if(pod->isPodType<ConcretePodA>())
+    return true;
+  if(pod->isPodType<ConcretePodB>())
+    return true;
 
-  return vec;
+  return false;
 }
 
-void registerPods()
+TEST(Pipeline, disconnect)
 {
-  REGISTER_POD_TEMPLATE(EntryPoint, Vec::ConstPtr);
-  REGISTER_POD(Sorter);
-  REGISTER_POD(Summarizer);
-  REGISTER_POD(Aggregator);
-  REGISTER_POD(DescriptorAssembler);
-  REGISTER_POD(HistogramGenerator);
-  REGISTER_POD(ConcretePodA);
-  REGISTER_POD(ConcretePodB);
-}
+  registerPods();
+  Pipeline pl(1);
+  generateDefaultPipeline(&pl);
+  EXPECT_TRUE(pl.hasPod("View0"));
+  EXPECT_TRUE(pl.pod("Sorter0")->hasParent("View0"));
 
-void generateDefaultPipeline(Pipeline* pl)
-{
-  EntryPoint<Vec::ConstPtr>* ep0 = new EntryPoint<Vec::ConstPtr>("View0");
-  EntryPoint<Vec::ConstPtr>* ep1 = new EntryPoint<Vec::ConstPtr>("View1");
-  EntryPoint<Vec::ConstPtr>* ep2 = new EntryPoint<Vec::ConstPtr>("View2");
+  pl.disconnect("Sorter0.Points <- View0.Output");
+  pl.writeGraphviz("graphvis-disconnect-before_pruning");
+  EXPECT_TRUE(pl.hasPod("View0"));
+  EXPECT_TRUE(!pl.pod("Sorter0")->hasParent("View0"));
 
-  Sorter* s0 = new Sorter("Sorter0");
-  Sorter* s1 = new Sorter("Sorter1");
-  Sorter* s2 = new Sorter("Sorter2");
-  s0->registerInput("Points", ep0, "Output");
-  s1->registerInput("Points", ep1, "Output");
-  s2->registerInput("Points", ep2, "Output");
-
-  Summarizer* summarizer0 = new Summarizer("Summarizer0");
-  Summarizer* summarizer1 = new Summarizer("Summarizer1");
-  Summarizer* summarizer2 = new Summarizer("Summarizer2");
-  summarizer0->registerInput("Points", s0, "Sorted");
-  summarizer1->registerInput("Points", s1, "Sorted");
-  summarizer2->registerInput("Points", s2, "Sorted");
-
-  Aggregator* aggregator = new Aggregator("Aggregator");
-  aggregator->registerInput("PointSets", s0, "Sorted");
-  aggregator->registerInput("PointSets", s1, "Sorted");
-  aggregator->registerInput("PointSets", s2, "Sorted");
-
-  Summarizer* summarizer3 = new Summarizer("Summarizer3");
-  summarizer3->registerInput("Points", aggregator, "Aggregated");
-
-  HistogramGenerator* h0 = new HistogramGenerator("Histogram0");
-  HistogramGenerator* h1 = new HistogramGenerator("Histogram1");
-  HistogramGenerator* h2 = new HistogramGenerator("Histogram2");
-  HistogramGenerator* h3 = new HistogramGenerator("Histogram3");
-  h0->registerInput("Points", s0, "Sorted");
-  h0->setParam("BinWidth", 0.5);
-  h0->setParam("Min", -2.0);
-  h0->setParam("Max", 2.0);
-  h1->registerInput("Points", s1, "Sorted");
-  h1->setParam("BinWidth", 0.5);
-  h1->setParam("Min", -2.0);
-  h1->setParam("Max", 2.0);
-  h2->registerInput("Points", s2, "Sorted");
-  h2->setParam("BinWidth", 0.5);
-  h2->setParam("Min", -2.0);
-  h2->setParam("Max", 2.0);
-  h3->registerInput("Points", aggregator, "Aggregated");
-  h3->setParam("Normalize", true);
-  h3->setParam("BinWidth", 0.25);
-  h3->setParam("Min", 0.0);
-  h3->setParam("Max", 3.0);
-  
-  DescriptorAssembler* da = new DescriptorAssembler("DescriptorAssembler");
-  da->registerInput("SubVectors", h0, "Histogram");
-  da->registerInput("SubVectors", h1, "Histogram");
-  da->registerInput("SubVectors", h2, "Histogram");
-  da->registerInput("SubVectors", h3, "Histogram");
-  da->registerInput("Elements", summarizer0, "Mean");
-  da->registerInput("Elements", summarizer0, "Stdev");
-  da->registerInput("Elements", summarizer0, "MeanNeighborSeparation");
-  da->registerInput("Elements", summarizer1, "Mean");
-  da->registerInput("Elements", summarizer1, "Stdev");
-  da->registerInput("Elements", summarizer1, "MeanNeighborSeparation");
-  da->registerInput("Elements", summarizer2, "Mean");
-  da->registerInput("Elements", summarizer2, "Stdev");
-  da->registerInput("Elements", summarizer2, "MeanNeighborSeparation");
-  da->registerInput("Elements", summarizer3, "Mean");
-  da->registerInput("Elements", summarizer3, "Stdev");
-  da->registerInput("Elements", summarizer3, "MeanNeighborSeparation");
-
-  pl->addConnectedComponent(ep0);
-
-  pl->addPod(new ConcretePodA("ConcretePodA"));
-  pl->addPod(new ConcretePodB("ConcretePodB"));
-  pl->pod("ConcretePodB")->setParam("Something", true);
-  pl->connect("DescriptorAssembler.Descriptor -> ConcretePodA.Vals");
-  pl->connect("DescriptorAssembler.Descriptor -> ConcretePodB.Vals");
+  pl.prune(immune);
+  pl.writeGraphviz("graphvis-disconnect-after_pruning");
+  EXPECT_TRUE(pl.hasPod("View0"));
+  EXPECT_TRUE(!pl.hasPod("Sorter0"));
+  EXPECT_TRUE(!pl.hasPod("Histogram0"));
+  EXPECT_TRUE(pl.hasPod("Aggregator0"));
+  EXPECT_TRUE(pl.hasPod("DescriptorAssembler"));
 }
 
 TEST(Pipeline, Serialize)
@@ -143,9 +81,9 @@ TEST(Pipeline, Serialize)
   Vec::ConstPtr v2 = generateVec(num_points);
   cout << "Done." << endl;
   
-  pl.setInput("View0", v0);
-  pl.setInput("View1", v1);
-  pl.setInput("View2", v2);
+  pl.push("View0", v0);
+  pl.push("View1", v1);
+  pl.push("View2", v2);
   pl.compute();
   Vec::ConstPtr descriptor;
   pl.pull("DescriptorAssembler", "Descriptor", &descriptor);
@@ -159,9 +97,9 @@ TEST(Pipeline, Serialize)
   pl2.writeGraphviz(graphvis_filename);
   cout << "Saved graphvis to " << graphvis_filename << endl;
 
-  pl2.setInput("View0", v0);
-  pl2.setInput("View1", v1);
-  pl2.setInput("View2", v2);
+  pl2.push("View0", v0);
+  pl2.push("View1", v1);
+  pl2.push("View2", v2);
   pl2.compute();
   Vec::ConstPtr descriptor2;
   pl2.pull("DescriptorAssembler", "Descriptor", &descriptor2);
@@ -182,114 +120,83 @@ TEST(Pipeline, Serialize)
 
 TEST(Pipeline, UniqueString)
 {
-  // -- Changing the params of an upstream node should change the hash.
-  uint64_t orig;
-  {
-    EntryPoint<Vec::ConstPtr>* ep0 = new EntryPoint<Vec::ConstPtr>("View0");
-    Sorter* s0 = new Sorter("Sorter0");
-    s0->registerInput("Points", ep0, "Output");
-    Summarizer* summarizer0 = new Summarizer("Summarizer0");
-    summarizer0->registerInput("Points", s0, "Sorted");
-    HistogramGenerator* h0 = new HistogramGenerator("Histogram0");
-    h0->registerInput("Points", s0, "Sorted");
-    h0->setParam("BinWidth", 0.1);
-    h0->setParam("Min", -2.0);
-    h0->setParam("Max", 2.0);
-    DescriptorAssembler* da = new DescriptorAssembler("DescriptorAssembler");
-    da->registerInput("SubVectors", h0, "Histogram");
-    da->registerInput("Elements", summarizer0, "Mean");
-    da->registerInput("Elements", summarizer0, "Stdev");
-    da->registerInput("Elements", summarizer0, "MeanNeighborSeparation");
-    
-    orig = da->getUniqueHash("Descriptor");
-    
-    h0->setParam("Normalize", true);
-    cout << "Different: " << orig << " " << da->getUniqueHash("Descriptor") << endl;
-    EXPECT_TRUE(orig != da->getUniqueHash("Descriptor"));
-    h0->setParam("Normalize", false);
-    cout << "Same: " << orig << " " << da->getUniqueHash("Descriptor") << endl;
-    EXPECT_TRUE(orig == da->getUniqueHash("Descriptor"));
-    h0->setParam("BinWidth", 0.05);
-    cout << "Different: " << orig << " " << da->getUniqueHash("Descriptor") << endl;
-    EXPECT_TRUE(orig != da->getUniqueHash("Descriptor"));
-    h0->setParam("BinWidth", 0.1);
-    cout << "Same: " << orig << " " << da->getUniqueHash("Descriptor") << endl;
-    EXPECT_TRUE(orig == da->getUniqueHash("Descriptor"));
+  registerPods();
+  
+  // -- Set up a simple pipeline.
+  Pipeline pl(1);
+  pl.createPod("EntryPoint<Vec::ConstPtr>", "View");
 
-    // Deallocate Pods.
-    // The Pipeline object is responsible for cleaning up all Pods on the heap.
-    Pipeline pl(1);
-    pl.addConnectedComponent(ep0);
-  }
+  pl.createPod("Sorter", "Sorter");
+  pl.connect("Sorter.Points <- View.Output");
+    
+  pl.createPod("Summarizer", "Summarizer");
+  pl.connect("Summarizer.Points <- Sorter.Sorted");
+    
+  pl.createPod("HistogramGenerator", "HistogramGenerator");
+  pl.connect("HistogramGenerator.Points <- Sorter.Sorted");
+  pl.pod("HistogramGenerator")->setParam("BinWidth", 0.1);
+  pl.pod("HistogramGenerator")->setParam("Min", -2.0);
+  pl.pod("HistogramGenerator")->setParam("Max", 2.0);
+
+  pl.createPod("DescriptorAssembler", "DescriptorAssembler");
+  pl.connect("DescriptorAssembler.SubVectors <- HistogramGenerator.Histogram");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer.Mean");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer.Stdev");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer.MeanNeighborSeparation");
+
+  // -- Changing the params of an upstream node should change the hash.
+  uint64_t orig = pl.pod("DescriptorAssembler")->getUniqueHash("Descriptor");
+
+  pl.pod("HistogramGenerator")->setParam("Normalize", true);
+  EXPECT_NE(orig, pl.pod("DescriptorAssembler")->getUniqueHash("Descriptor"));
+  pl.pod("HistogramGenerator")->setParam("Normalize", false);
+  EXPECT_EQ(orig, pl.pod("DescriptorAssembler")->getUniqueHash("Descriptor"));
+  pl.pod("HistogramGenerator")->setParam("BinWidth", 0.05);
+  EXPECT_NE(orig, pl.pod("DescriptorAssembler")->getUniqueHash("Descriptor"));
+  pl.pod("HistogramGenerator")->setParam("BinWidth", 0.1);
+  EXPECT_EQ(orig, pl.pod("DescriptorAssembler")->getUniqueHash("Descriptor"));
 
   // -- Changing the order of registration should change the hash.
-  {
-    EntryPoint<Vec::ConstPtr>* ep0 = new EntryPoint<Vec::ConstPtr>("View0");
-    Sorter* s0 = new Sorter("Sorter0");
-    s0->registerInput("Points", ep0, "Output");
-    Summarizer* summarizer0 = new Summarizer("Summarizer0");
-    summarizer0->registerInput("Points", s0, "Sorted");
-    HistogramGenerator* h0 = new HistogramGenerator("Histogram0");
-    h0->registerInput("Points", s0, "Sorted");
-    h0->setParam("BinWidth", 0.1);
-    h0->setParam("Min", -2.0);
-    h0->setParam("Max", 2.0);
-    DescriptorAssembler* da = new DescriptorAssembler("DescriptorAssembler");
-    da->registerInput("SubVectors", h0, "Histogram");
-    da->registerInput("Elements", summarizer0, "Stdev"); // This has been changed.
-    da->registerInput("Elements", summarizer0, "Mean");
-    da->registerInput("Elements", summarizer0, "MeanNeighborSeparation");
-    
-    cout << "Different: " << orig << " " << da->getUniqueHash("Descriptor") << endl;
-    EXPECT_TRUE(orig != da->getUniqueHash("Descriptor"));
+  pl.deletePod("DescriptorAssembler");
+  pl.createPod("DescriptorAssembler", "DescriptorAssembler");
+  pl.connect("DescriptorAssembler.SubVectors <- HistogramGenerator.Histogram");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer.MeanNeighborSeparation");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer.Stdev");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer.Mean");
+  EXPECT_NE(orig, pl.pod("DescriptorAssembler")->getUniqueHash("Descriptor"));
 
-    Pipeline pl(1);
-    pl.addConnectedComponent(ep0);
-  }
+  pl.deletePod("DescriptorAssembler");
+  pl.createPod("DescriptorAssembler", "DescriptorAssembler");
+  pl.connect("DescriptorAssembler.SubVectors <- HistogramGenerator.Histogram");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer.Mean");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer.Stdev");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer.MeanNeighborSeparation");
+  EXPECT_EQ(orig, pl.pod("DescriptorAssembler")->getUniqueHash("Descriptor"));
 
   // -- Changing the structure should change the hash.
-  {
-    EntryPoint<Vec::ConstPtr>* ep0 = new EntryPoint<Vec::ConstPtr>("View0");
-    Sorter* s0 = new Sorter("Sorter0");
-    s0->registerInput("Points", ep0, "Output");
-    Summarizer* summarizer0 = new Summarizer("Summarizer0");
-    summarizer0->registerInput("Points", s0, "Sorted");
-    Summarizer* summarizer1 = new Summarizer("Summarizer1");
-    summarizer1->registerInput("Points", s0, "Sorted");
-    HistogramGenerator* h0 = new HistogramGenerator("Histogram0");
-    h0->registerInput("Points", s0, "Sorted");
-    h0->setParam("BinWidth", 0.1);
-    h0->setParam("Min", -2.0);
-    h0->setParam("Max", 2.0);
-    DescriptorAssembler* da = new DescriptorAssembler("DescriptorAssembler");
-    da->registerInput("SubVectors", h0, "Histogram");
-    da->registerInput("Elements", summarizer0, "Mean");
-    da->registerInput("Elements", summarizer0, "Stdev");
-    da->registerInput("Elements", summarizer0, "MeanNeighborSeparation");
-    da->registerInput("Elements", summarizer1, "Mean");
-    da->registerInput("Elements", summarizer1, "Stdev");
-    da->registerInput("Elements", summarizer1, "MeanNeighborSeparation");
-
-    cout << "Different: " << orig << " " << da->getUniqueHash("Descriptor") << endl;
-    EXPECT_TRUE(orig != da->getUniqueHash("Descriptor"));
-
-    Pipeline pl(1);
-    pl.addConnectedComponent(ep0);
-  }
+  pl.createPod("HistogramGenerator", "HistogramGenerator2");
+  pl.connect("HistogramGenerator2.Points <- Sorter.Sorted");
+  pl.pod("HistogramGenerator2")->setParam("BinWidth", 0.1);
+  pl.pod("HistogramGenerator2")->setParam("Min", -2.0);
+  pl.pod("HistogramGenerator2")->setParam("Max", 2.0);
+  pl.connect("DescriptorAssembler.SubVectors <- HistogramGenerator2.Histogram");
+  EXPECT_NE(orig, pl.pod("DescriptorAssembler")->getUniqueHash("Descriptor"));
+  pl.deletePod("HistogramGenerator2");
+  EXPECT_EQ(orig, pl.pod("DescriptorAssembler")->getUniqueHash("Descriptor"));
 }
 
 TEST(Pipeline, MultiCompute)
 {
   Pipeline pl(10);
-  pl.loadYAML("example.pl");
+  pl.loadYAML("example.yml");
 
   int num_points = 1e3;
   Vec::ConstPtr v0 = generateVec(num_points);
   Vec::ConstPtr v1 = generateVec(num_points);
   Vec::ConstPtr v2 = generateVec(num_points);
-  pl.setInput("View0", v0);
-  pl.setInput("View1", v1);
-  pl.setInput("View2", v2);
+  pl.push("View0", v0);
+  pl.push("View1", v1);
+  pl.push("View2", v2);
   pl.compute();
   Vec::ConstPtr descriptor = pl.pull<Vec::ConstPtr>("DescriptorAssembler.Descriptor");
   pl.compute();
@@ -302,15 +209,15 @@ TEST(Pipeline, MultiCompute)
 TEST(Pipeline, OutputFlush)
 {
   Pipeline pl(10);
-  pl.loadYAML("example.pl");
+  pl.loadYAML("example.yml");
 
   int num_points = 1e3;
   Vec::ConstPtr v0 = generateVec(num_points);
   Vec::ConstPtr v1 = generateVec(num_points);
   Vec::ConstPtr v2 = generateVec(num_points);
-  pl.setInput("View0", v0);
-  pl.setInput("View1", v1);
-  pl.setInput("View2", v2);
+  pl.push("View0", v0);
+  pl.push("View1", v1);
+  pl.push("View2", v2);
   pl.compute();
   EXPECT_TRUE(pl.pull<Vec::ConstPtr>("DescriptorAssembler", "Descriptor"));
 
@@ -332,9 +239,9 @@ TEST(Pipeline, Debugging)
   Vec::ConstPtr v1 = generateVec(num_points);
   Vec::ConstPtr v2 = generateVec(num_points);
   
-  pl.setInput("View0", v0);
-  pl.setInput("View1", v1);
-  pl.setInput("View2", v2);
+  pl.push("View0", v0);
+  pl.push("View1", v1);
+  pl.push("View2", v2);
   pl.compute();
   cout << pl.reportTiming() << endl;
 
@@ -351,50 +258,43 @@ TEST(Pipeline, Debugging)
 
 TEST(Pipeline, OptionalInputs)
 {
+  registerPods();
+  
   // pull(input_name, &vec<T> data) should not abort even if zero outputs are registered to input_name.
   
   {
-    EntryPoint<Vec::ConstPtr>* ep0 = new EntryPoint<Vec::ConstPtr>("View0");
-    Sorter* s0 = new Sorter("Sorter0");
-    s0->registerInput("Points", ep0, "Output");
-    Summarizer* summarizer0 = new Summarizer("Summarizer0");
-    summarizer0->registerInput("Points", s0, "Sorted");
-    HistogramGenerator* h0 = new HistogramGenerator("Histogram0");
-    h0->registerInput("Points", s0, "Sorted");
-    h0->setParam("BinWidth", 0.1);
-    h0->setParam("Min", -2.0);
-    h0->setParam("Max", 2.0);
-    DescriptorAssembler* da = new DescriptorAssembler("DescriptorAssembler");
-    da->registerInput("Elements", summarizer0, "Stdev");
-    da->registerInput("Elements", summarizer0, "Mean");
-    da->registerInput("Elements", summarizer0, "MeanNeighborSeparation");
-
     Pipeline pl(1);
-    pl.addConnectedComponent(ep0);
-    pl.setInput<Vec::ConstPtr>("View0", generateVec(100));
+    pl.createPod("EntryPoint<Vec::ConstPtr>", "View");
+    
+    pl.createPod("Sorter", "Sorter");
+    pl.connect("Sorter.Points <- View.Output");
+    
+    pl.createPod("Summarizer", "Summarizer");
+    pl.connect("Summarizer.Points <- Sorter.Sorted");
+    
+    pl.createPod("HistogramGenerator", "HistogramGenerator");
+    pl.connect("HistogramGenerator.Points <- Sorter.Sorted");
+    pl.pod("HistogramGenerator")->setParam("BinWidth", 0.1);
+    pl.pod("HistogramGenerator")->setParam("Min", -2.0);
+    pl.pod("HistogramGenerator")->setParam("Max", 2.0);
+
+    // Connect just to the Elements input.
+    pl.createPod("DescriptorAssembler", "DescriptorAssembler");
+    pl.connect("DescriptorAssembler.Elements <- Summarizer.Mean");
+    pl.connect("DescriptorAssembler.Elements <- Summarizer.Stdev");
+    pl.connect("DescriptorAssembler.Elements <- Summarizer.MeanNeighborSeparation");
+
+    pl.push<Vec::ConstPtr>("View", generateVec(100));
     pl.compute();
     EXPECT_TRUE(pl.pull<Vec::ConstPtr>("DescriptorAssembler", "Descriptor")->size() == 3);
-  }
 
-  {
-    EntryPoint<Vec::ConstPtr>* ep0 = new EntryPoint<Vec::ConstPtr>("View0");
-    Sorter* s0 = new Sorter("Sorter0");
-    s0->registerInput("Points", ep0, "Output");
-    Summarizer* summarizer0 = new Summarizer("Summarizer0");
-    summarizer0->registerInput("Points", s0, "Sorted");
-    HistogramGenerator* h0 = new HistogramGenerator("Histogram0");
-    h0->registerInput("Points", s0, "Sorted");
-    h0->setParam("BinWidth", 0.1);
-    h0->setParam("Min", -2.0);
-    h0->setParam("Max", 2.0);
-    DescriptorAssembler* da = new DescriptorAssembler("DescriptorAssembler");
-    da->registerInput("SubVectors", h0, "Histogram");
+    // Connect just to the SubVectors input.
+    pl.deletePod("DescriptorAssembler");
+    pl.createPod("DescriptorAssembler", "DescriptorAssembler");
+    pl.connect("DescriptorAssembler.SubVectors <- HistogramGenerator.Histogram");
 
-    Pipeline pl(1);
-    pl.addConnectedComponent(ep0);
-    pl.setInput<Vec::ConstPtr>("View0", generateVec(100));
+    pl.push<Vec::ConstPtr>("View", generateVec(100));
     pl.compute();
-
     EXPECT_TRUE(pl.pull<Vec::ConstPtr>("DescriptorAssembler", "Descriptor")->size() == 40);
   }
 }
@@ -413,7 +313,7 @@ TEST(Pod, ComputeOutsidePipeline)
   
   // The above can be non-ideal, so using
   // a non-static member function instead might be preferable.
-  HistogramGenerator hg("aoeu");
+  HistogramGenerator hg("Aoeu");
   hg.setParam("BinWidth", 0.1);
   hg.setParam("Min", -2.0);
   hg.setParam("Max", 2.0);
@@ -424,12 +324,69 @@ TEST(Pod, ComputeOutsidePipeline)
   hg.debug();
 }
 
-// TEST(Pod, BadLoad)
-// {
-//   Pipeline pl(1);
-//   pl.load("lib/libpipeline3.so");
-// }
+TEST(Pipeline, Misc)
+{
+  Pipeline pl(1);
+  pl.createPod("EntryPoint<Vec::ConstPtr>", "View0");
+  EXPECT_TRUE(pl.pod("View0")->numRegisteredOutputs() == 0);
+  EXPECT_TRUE(pl.pod("View0")->hasAllRequiredInputs());
 
+  pl.createPod("Sorter", "Sorter0");
+  EXPECT_TRUE(!pl.pod("Sorter0")->hasAllRequiredInputs());
+  pl.connect("Sorter0.Points <- View0.Output");
+  EXPECT_TRUE(pl.pod("View0")->numRegisteredOutputs() == 1);
+  EXPECT_TRUE(pl.pod("Sorter0")->hasAllRequiredInputs());
+  pl.createPod("Summarizer", "Summarizer0");
+  pl.connect("Summarizer0.Points <- Sorter0.Sorted");
+
+  pl.createPod("Sorter", "Sorter1");
+  pl.connect("Sorter1.Points <- View0.Output");
+  EXPECT_TRUE(pl.pod("View0")->numRegisteredOutputs() == 2);
+  pl.createPod("Summarizer", "Summarizer1");
+  pl.connect("Summarizer1.Points <- Sorter1.Sorted");
+
+  pl.createPod("DescriptorAssembler", "DescriptorAssembler");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer0.Mean");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer0.Stdev");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer0.MeanNeighborSeparation");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer1.Mean");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer1.Stdev");
+  pl.connect("DescriptorAssembler.Elements <- Summarizer1.MeanNeighborSeparation");
+
+  EXPECT_TRUE(example::isRequired(pl.pod("DescriptorAssembler")));
+  EXPECT_TRUE(example::isRequired(pl.pod("View0")));
+  EXPECT_TRUE(!example::isRequired(pl.pod("Sorter0")));
+  EXPECT_TRUE(!example::isRequired(pl.pod("Summarizer0")));
+    
+  pl.push<Vec::ConstPtr>("View0", generateVec(100));
+  pl.compute();
+  pl.writeGraphviz("original.gv");
+  EXPECT_TRUE(pl.hasPod("Summarizer0"));
+  EXPECT_TRUE(!pl.hasPod("aoeu"));
+  
+  for(size_t i = 0; i < pl.pods().size(); ++i) {
+    cout << pl.pods()[i]->name() << endl;
+    EXPECT_TRUE(pl.pods()[i]->hasAllRequiredInputs());
+    assert(pl.pods()[i]->hasAllRequiredInputs());
+  }
+  
+  EXPECT_TRUE(pl.pod("View0")->numRegisteredOutputs() == 2);
+  EXPECT_TRUE(pl.pod("Summarizer0")->hasAllRequiredInputs());
+  pl.deletePod("Sorter1");
+  pl.writeGraphviz("after_deleting.gv");
+  EXPECT_TRUE(!pl.hasPod("Sorter1"));
+  EXPECT_TRUE(pl.hasPod("Summarizer1"));
+  EXPECT_TRUE(pl.pod("View0")->numRegisteredOutputs() == 1);
+  EXPECT_TRUE(!pl.pod("Summarizer1")->hasAllRequiredInputs());
+  pl.prune(example::isRequired);
+  pl.writeGraphviz("after_pruning.gv");
+  EXPECT_TRUE(!pl.hasPod("Summarizer1"));
+  
+  // This should not crash.
+  pl.push<Vec::ConstPtr>("View0", generateVec(100));
+  pl.compute();
+}
+     
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

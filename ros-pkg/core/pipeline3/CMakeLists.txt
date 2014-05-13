@@ -28,8 +28,9 @@ rosbuild_add_library(${PROJECT_NAME}
   src/pod.cpp
   src/example_pods.cpp
   src/twiddler.cpp
+  src/common.cpp
   )
-target_link_libraries(${PROJECT_NAME} yaml-cpp)
+#target_link_libraries(${PROJECT_NAME} yaml-cpp)
 rosbuild_add_boost_directories()
 rosbuild_link_boost(${PROJECT_NAME} filesystem system)
 
@@ -37,9 +38,16 @@ rosbuild_add_gtest(test_pipeline src/test_pipeline.cpp)
 rosbuild_add_gtest_build_flags(test_pipeline)
 target_link_libraries(test_pipeline pipeline3)
 
-rosbuild_add_gtest(test_twiddler src/test_twiddler.cpp)
-rosbuild_add_gtest_build_flags(test_twiddler)
-target_link_libraries(test_twiddler pipeline3)
+#rosbuild_add_gtest(test_twiddler src/test_twiddler.cpp)
+#rosbuild_add_compile_flags(test_twiddler -std=c++0x)
+#target_link_libraries(test_twiddler pipeline3)
 
 rosbuild_add_executable(yaml_experiment src/yaml_experiment.cpp)
 target_link_libraries(yaml_experiment ${PROJECT_NAME})
+
+rosbuild_add_executable(yaml_clone src/yaml_clone.cpp)
+target_link_libraries(yaml_clone ${PROJECT_NAME})
+
+rosbuild_add_executable(write_graphviz src/prog/write_graphviz.cpp)
+target_link_libraries(write_graphviz ${PROJECT_NAME})
+rosbuild_link_boost(write_graphviz filesystem program_options)

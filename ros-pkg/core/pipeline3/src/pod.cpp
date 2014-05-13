@@ -21,7 +21,7 @@ namespace pl
 
   std::string Outlet::address() const
   {
-    return pod_->getName() + separator() + name_;
+    return pod_->name() + separator() + name_;
   }
   
   Pod::Pod(std::string name) :
@@ -59,26 +59,46 @@ namespace pl
     const vector<const Outlet*>& inputs = it->second;
     vector<string> names;
     for(size_t i = 0; i < inputs.size(); ++i)
-      names.push_back(inputs[i]->pod()->getName());
+      names.push_back(inputs[i]->pod()->name() + separator() + inputs[i]->name());
     return names;
+  }
+
+  std::vector<std::string> Pod::upstreamOutputNames() const
+  {
+    vector<string> names;
+    std::map<std::string, std::vector<const Outlet*> >::const_iterator it;
+    for(it = inputs_.begin(); it != inputs_.end(); ++it) {
+      vector<string> n = upstreamOutputNames(it->first);
+      names.insert(names.end(), n.begin(), n.end());
+    }
+    return names;
+  }
+
+  void Pod::registerPodTemplateType(std::string type_name, CreatorFnPtr fp)
+  {
+    // We don't want to assertValidName here because Pod class template
+    // names are allowed to be anything.
+    creator_map_[type_name] = fp;
   }
   
   void Pod::registerPodType(std::string type_name, CreatorFnPtr fp)
   {
+    // Here we want to enforce CamelCase.
+    assertValidName(type_name);
     creator_map_[type_name] = fp;
   }
   
-  Pod* Pod::createPod(std::string type_name, std::string name, Params params)
+  Pod* Pod::createPod(std::string type_name, std::string name)
   {
     map<string, CreatorFnPtr>::const_iterator it;
     it = creator_map_.find(type_name);
     if(it == creator_map_.end()) {
       PL_ABORT("Tried to create pod type \"" << type_name << "\", but it has not been registered.  See the REGISTER_POD macro.");
     }
-    return it->second(name, params);
+    return it->second(name);
   }
 
-  int Pod::numIncoming(std::string input_name) const
+  size_t Pod::numIncoming(std::string input_name) const
   {
     std::map<std::string, std::vector<const Outlet*> >::const_iterator it;
     it = inputs_.find(input_name);
@@ -89,7 +109,7 @@ namespace pl
     }
 
     const std::vector<const Outlet*>& outlets = it->second;
-    int num = 0;
+    size_t num = 0;
     for(size_t i = 0; i < outlets.size(); ++i)
       if(outlets[i]->hasData())
         ++num;
@@ -113,7 +133,7 @@ namespace pl
   }
   
   double Pod::getComputationTime() const {
-    assert(done_computation_);
+    PL_ASSERT(done_computation_);
     return time_msec_;
   }
 
@@ -128,7 +148,7 @@ namespace pl
     started_computation_ = false;
     time_msec_ = -1;
     num_finished_parents_ = 0;
-    assert(!on_queue_);
+    PL_ASSERT(!on_queue_);
 
     // -- Flush all outlets.
     // Otherwise, if a Pod pushes output on run t,
@@ -140,13 +160,13 @@ namespace pl
   }
   
   void Pod::pl_compute() {
-    assert(on_queue_);
+    PL_ASSERT(on_queue_);
     on_queue_ = false;
 
-    assert(!started_computation_);
+    PL_ASSERT(!started_computation_);
     if(done_computation_)
       cerr << name_ << " is done computation, but its pl_compute() function is being called!" << endl;
-    assert(!done_computation_);
+    PL_ASSERT(!done_computation_);
   
     started_computation_ = true;
   
@@ -176,6 +196,18 @@ namespace pl
     oss << setw(width) << setfill('0') << num_times_computed_ << "-" << name_;
     return oss.str();
   }
+  
+  std::vector<const Outlet*> Pod::inputPipes(const std::string& input_name) const
+  {
+    PL_ASSERT(inputs_.count(input_name));
+    return inputs_.find(input_name)->second;
+  }
+
+  const Outlet* Pod::inputPipe(const std::string& input_name) const
+  {
+    PL_ASSERT(inputPipes(input_name).size() == 1);
+    return inputPipes(input_name)[0];
+  }
 
   inline string Pod::debugDirectory() const
   {
@@ -203,18 +235,18 @@ namespace pl
   void Pod::registerInput(const std::string& input_name, Pod* pod, const std::string& output_name)
   {
     if(declared_inputs_.count(input_name) == 0) {
-      PL_ABORT(getClassName() << " \"" << getName() << "\" tried to register undeclared input \"" << input_name << "\".");
+      PL_ABORT(getClassName() << " \"" << name() << "\" tried to register undeclared input \"" << input_name << "\".");
     }
 
     if(!pod->hasOutput(output_name)) {
-      PL_ABORT("Tried to connect " << getName() << separator() << input_name << " <- " << pod->getName() << separator() << output_name
-               << ", but Pod \"" << pod->getName() << "\" does not have an output named \"" << output_name << "\".");
+      PL_ABORT("Tried to connect " << name() << separator() << input_name << " <- " << pod->name() << separator() << output_name
+               << ", but Pod \"" << pod->name() << "\" does not have an output named \"" << output_name << "\".");
     }
     
     const Outlet* outlet = pod->getOutlet(output_name);
     if(!outlet->checkType(declared_inputs_[input_name])) { 
-      PL_ABORT(getClassName() << " \"" << getName() << "\" tried to register \"" << input_name << " <- "
-               << pod->getName() << separator() << output_name << "\", but types do not match.");
+      PL_ABORT(getClassName() << " \"" << name() << "\" tried to register \"" << input_name << " <- "
+               << pod->name() << separator() << output_name << "\", but types do not match.");
     }
 
     // -- Check multi status.
@@ -228,15 +260,59 @@ namespace pl
     parents_.push_back(pod);
     pod->children_.push_back(this);
   }
-  
-  const Outlet* Pod::getOutlet(std::string name) const
+
+  void Pod::unregisterInput(const std::string& input_name, Pod* pod, const std::string& output_name)
   {
-    if(outlets_.count(name) != 1) {
-      PL_ABORT("Attempted to get output (\"" << name << "\") on Pod \""
-               << getName() << "\", but no output with that name exists.");
+    if(declared_inputs_.count(input_name) == 0) {
+      PL_ABORT(getClassName() << " \"" << name() << "\" tried to unregister undeclared input \"" << input_name << "\".");
     }
 
-    return outlets_.find(name)->second; 
+    if(!pod->hasOutput(output_name)) {
+      PL_ABORT("Tried to disconnect " << name() << separator() << input_name << " <- " << pod->name() << separator() << output_name
+               << ", but Pod \"" << pod->name() << "\" does not have an output named \"" << output_name << "\".");
+    }
+    
+    const Outlet* outlet = pod->getOutlet(output_name);
+    if(!outlet->checkType(declared_inputs_[input_name])) { 
+      PL_ABORT(getClassName() << " \"" << name() << "\" tried to unregister \"" << input_name << " <- "
+               << pod->name() << separator() << output_name << "\", but types do not match.");
+    }
+
+    if(!inputs_.count(input_name)) {
+      PL_ABORT(getClassName() << " \"" << name() << "\" tried to unregister input \"" << input_name << "\", but no registered inputs were found.");
+    }
+
+    // -- Delete the outlet from inputs_.
+    vector<const Outlet*>& outlets = inputs_[input_name];
+    vector<const Outlet*>::iterator it = find(outlets.begin(), outlets.end(), outlet);
+    if(it == outlets.end()) {
+      PL_ABORT(getClassName() << " \"" << name() << "\" tried to unregister \"" << input_name << " <- "
+               << pod->name() << separator() << output_name << "\", but that connection was not found.");
+    }
+    outlets.erase(it);
+    
+    // -- If there are no more connections between this Pod and the parent Pod,
+    //    remove the corresponding entries from parents_ and pod->children_.
+    //    hasParent(name) only uses inputs_, which has been updated above at this point.
+    if(!hasParent(pod->name())) {
+      vector<Pod*>::iterator it0 = find(parents_.begin(), parents_.end(), pod);
+      PL_ASSERT(it0 != parents_.end());
+      parents_.erase(it0);
+
+      vector<Pod*>::iterator it1 = find(pod->children_.begin(), pod->children_.end(), this);
+      PL_ASSERT(it1 != pod->children_.end());
+      pod->children_.erase(it1);
+    }
+  }
+
+  const Outlet* Pod::getOutlet(std::string output_name) const
+  {
+    if(outlets_.count(output_name) != 1) {
+      PL_ABORT("Attempted to get output (\"" << output_name << "\") on Pod \""
+               << name() << "\", but no output with that name exists.");
+    }
+
+    return outlets_.find(output_name)->second; 
   }
   
   std::string Pod::getUniqueString(const std::string& output_name) const
@@ -246,58 +322,47 @@ namespace pl
     oss << "Output " << output_name << endl;
     return oss.str();
   }
-
-  uint64_t hashDjb2(const char *str)
-  {
-    uint64_t hash = 5381;
-    int c;
-
-    // See http://www.cse.yorku.ca/~oz/hash.html.
-    while((c = *str++))
-      hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
-  
-    return hash;
-  }
   
   uint64_t Pod::getUniqueHash(const std::string& output_name) const
   {
     return hashDjb2(getUniqueString(output_name).c_str());
   }
+
+  std::string Pod::uniqueReadableId(const std::string& output_name) const
+  {
+    ostringstream oss;
+    oss << name_ << separator() << output_name << ":" << getUniqueHash(output_name);
+    return oss.str();
+  }
+  
+  // Doesn't remove Pod names in inputs.
+  // std::string removePodNames(const std::string& str)
+  // {
+  //   istringstream iss(str);
+  //   string line;
+  //   ostringstream oss;
+  //   while(!iss.eof()) {
+  //     getline(iss, line);
+  //     if(line.find("Name:") == string::npos)
+  //       oss << line << endl;
+  //   }
+  //   return oss.str();
+  // }
+
+  class Blah
+  {
+  public:
+    double val;
+  };
   
   std::string Pod::getUniqueString() const
   {
-    map<string, string> nm;
-    string working = getUnnormalizedUniqueString(&nm);
-
-    // -- Replace pod names with normalized pod names.
-    // map<string, string>::const_iterator it;
-    // for(it = nm.begin(); it != nm.end(); ++it) { 
-    //   boost::regex reg("^" + it->first + "$");
-    //   working = boost::regex_replace(working, reg, it->second);
-    //   boost::regex reg2("<\\- " + it->first + " ");
-    //   working = boost::regex_replace(working, reg2, "<- " + it->second + " ");
-    // }
-
-    return working;
-  }
-  
-  std::string Pod::getUnnormalizedUniqueString(std::map<std::string, std::string>* nm) const
-  {
     vector<Pod*> upstream = getUpstreamPods();
     ostringstream oss;
-    for(size_t i = 0; i < upstream.size(); ++i) {
-      ostringstream podname_oss;
-      podname_oss << "Pod" << i;
-      (*nm)[upstream[i]->getName()] = podname_oss.str();
+    for(size_t i = 0; i < upstream.size(); ++i)
+      oss << YAML::Dump(upstream[i]->YAMLize()) << endl;
 
-      oss << YAML::Dump(upstream[i]->YAMLize());
-    }
-
-    ostringstream podname_oss;
-    podname_oss << "Pod" << nm->size();
-    (*nm)[name_] = podname_oss.str();
-    oss << YAML::Dump(YAMLize());
-    
+    oss << YAML::Dump(YAMLize()) << endl;
     return oss.str();
   }
 
@@ -336,7 +401,7 @@ namespace pl
   YAML::Node Pod::YAMLize() const
   {
     YAML::Node pod;
-    pod["Name"] = getName();
+    pod["Name"] = name();
     pod["Type"] = getClassName();
 
     // -- Inputs.
@@ -347,7 +412,7 @@ namespace pl
       const vector<const Outlet*>& outlets = it->second;
       ostringstream oss;
       for(size_t i = 0; i < outlets.size(); ++i) {
-        oss << outlets[i]->pod()->getName() << separator() << outlets[i]->getName();
+        oss << outlets[i]->pod()->name() << separator() << outlets[i]->name();
         if(i < outlets.size() - 1)
           oss << " ";
       }
@@ -363,9 +428,49 @@ namespace pl
     return pod;
   }
   
-  bool Pod::hasOutput(const std::string& name) const
+  bool Pod::hasOutput(const std::string& output_name) const
   {
-    return outlets_.count(name);
+    return outlets_.count(output_name);
+  }
+  
+  bool Pod::hasAllRequiredInputs() const
+  {
+    map<string, boost::any>::const_iterator it;
+    for(it = declared_inputs_.begin(); it != declared_inputs_.end(); ++it) {
+      PL_ASSERT(multi_flags_.find(it->first) != multi_flags_.end());
+      if(multi_flags_.find(it->first)->second)
+        continue;
+      if(inputs_.count(it->first) == 0 || inputs_.find(it->first)->second.empty())
+        return false;  
+    }
+    
+    return true;
+  }
+
+  std::vector<Pod*> Pod::downstream(const std::string& output_name) const
+  {
+    vector<Pod*> pods;
+    string address = name() + separator() + output_name;
+    for(size_t i = 0; i < children_.size(); ++i) {
+      vector<string> addresses = children_[i]->upstreamOutputNames();
+      for(size_t j = 0; j < addresses.size(); ++j)
+        if(addresses[j] == address)
+          pods.push_back(children_[i]);
+    }
+    return pods;
+  }
+
+  bool Pod::hasParent(const std::string& name) const
+  {
+    // omg we need c++11
+    std::map<std::string, std::vector<const Outlet*> >::const_iterator it;  
+    for(it = inputPipes().begin(); it != inputPipes().end(); ++it) {
+      const std::vector<const Outlet*>& outlets = it->second;
+      for(size_t i = 0; i < outlets.size(); ++i)
+        if(outlets[i]->pod()->name() == name)
+          return true;
+    }
+    return false;
   }
   
 } // namespace pl

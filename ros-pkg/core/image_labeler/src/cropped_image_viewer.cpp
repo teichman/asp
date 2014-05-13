@@ -12,17 +12,17 @@ int main(int argc, char** argv)
   size_t num_imgs = 0;
   bfs::directory_iterator end_itr;
   for(bfs::directory_iterator itr(root); itr != end_itr; ++itr)
-    if((itr->path().extension().compare(".png") == 0) | 
-       (itr->path().extension().compare(".jpg") == 0))
+    if((itr->path().extension().string().compare(".png") == 0) |
+       (itr->path().extension().string().compare(".jpg") == 0))
       ++num_imgs;
 
   // -- Get the sorted scene names.
   size_t idx = 0;
   vector<string> names(num_imgs);
   for(bfs::directory_iterator itr(root); itr != end_itr; ++itr) {
-    if((itr->path().extension().compare(".png") == 0) | 
-       (itr->path().extension().compare(".jpg") == 0)) {
-      string filename = itr->path().filename();
+    if((itr->path().extension().string().compare(".png") == 0) |
+       (itr->path().extension().string().compare(".jpg") == 0)) {
+      string filename = itr->path().filename().string();
       names[idx] = filename;
       ++idx;
     }

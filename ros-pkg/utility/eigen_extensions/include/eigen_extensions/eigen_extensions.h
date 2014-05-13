@@ -4,7 +4,6 @@
 #include <Eigen/Eigen>
 #define EIGEN_YES_I_KNOW_SPARSE_MODULE_IS_NOT_STABLE_YET
 #include <Eigen/Sparse>
-#define BOOST_FILESYSTEM_VERSION 2
 #include <boost/filesystem.hpp>
 #include <stdint.h>
 #include <fstream>
@@ -13,23 +12,6 @@
 
 namespace eigen_extensions {
 
-  inline void stdToEig(const std::vector<double>& std, Eigen::VectorXd* eig)
-  {
-    eig->resize(std.size());
-    for(size_t i = 0; i < std.size(); ++i)
-      eig->coeffRef(i) = std[i];
-  }
-  
-  inline double stdev(const Eigen::VectorXd& vec)
-  {
-    double mean = vec.sum() / (double)vec.rows();
-    double total = 0;
-    for(int i = 0; i < vec.rows(); ++i)
-      total += (vec.coeffRef(i) - mean) * (vec.coeffRef(i) - mean);
-    double var = total / (double)vec.rows();
-    return sqrt(var);
-  }
-  
   template<class S, int T, int U>
   void save(const Eigen::Matrix<S, T, U>& mat, const std::string& filename);
 
@@ -50,6 +32,9 @@ namespace eigen_extensions {
   
   template<class S, int T, int U>
   void serialize(const Eigen::Matrix<S, T, U>& mat, std::ostream& strm);
+
+  template<class S, int T, int U>
+  size_t serializationLength(const Eigen::Matrix<S, T, U>& mat);
   
   template<class S, int T, int U>
   void deserialize(std::istream& strm, Eigen::Matrix<S, T, U>* mat);
@@ -83,6 +68,16 @@ namespace eigen_extensions {
   /************************************************************
    * Template implementations
    ************************************************************/
+
+  template<class S, int T, int U>
+  size_t serializationLength(const Eigen::Matrix<S, T, U>& mat)
+  {
+    size_t num = 0;
+    num += 3 * sizeof(int);  // header
+    num += sizeof(S) * mat.rows() * mat.cols();  // data
+    return num;
+  }
+
   
   template<class S, int T, int U>
   void serialize(const Eigen::Matrix<S, T, U>& mat, std::ostream& strm)
@@ -169,14 +164,14 @@ namespace eigen_extensions {
     for(IndexType i = 0; i < mat.outerSize(); ++i) {
       int num = 0;
       for(InnerIterator it(mat, i); it; ++it)
-        ++num;
+	++num;
       strm.write((const char*)&num, sizeof(num));
       
       for(InnerIterator it(mat, i); it; ++it) {
-        int idx = it.index();
-        ScalarType buf = it.value();
-        strm.write((const char*)&idx, sizeof(idx));
-        strm.write((const char*)&buf, sizeof(buf));
+	int idx = it.index();
+	ScalarType buf = it.value();
+	strm.write((const char*)&idx, sizeof(idx));
+	strm.write((const char*)&buf, sizeof(buf));
       }
     }
   }
@@ -210,9 +205,9 @@ namespace eigen_extensions {
       strm.read((char*)&num, sizeof(int));
       int idx;
       for(int j = 0; j < num; ++j) {
-        strm.read((char*)&idx, sizeof(idx));
-        strm.read((char*)&buf, sizeof(buf));
-        mat->insertBackByOuterInner(i, idx) = buf;
+	strm.read((char*)&idx, sizeof(idx));
+	strm.read((char*)&buf, sizeof(buf));
+	mat->insertBackByOuterInner(i, idx) = buf;
       }
     }
     mat->finalize();
@@ -254,7 +249,7 @@ namespace eigen_extensions {
   {
     // -- Read the header.
     std::string line;
-    while(line.length() == 0) getline(strm, line);
+    getline(strm, line);
     assert(line[0] == '%');
     std::istringstream iss(line.substr(1));
     int rows;
@@ -268,7 +263,7 @@ namespace eigen_extensions {
       getline(strm, line);
       std::istringstream iss(line);
       for(int x = 0; x < cols; ++x) {
-        iss >> mat->coeffRef(y, x);
+	iss >> mat->coeffRef(y, x);
       }
     }
   }
@@ -307,6 +302,23 @@ namespace eigen_extensions {
   void deserializeScalar(std::istream& strm, T* val)
   {
     strm.read((char*)val, sizeof(T));
+  }
+
+  template<class S, int T>
+  inline std::vector<S> eigToVec(const Eigen::Matrix<S, T, 1>& eig) {
+    std::vector<S> vec(eig.rows());
+    for(int i = 0; i < eig.rows(); ++i)
+      vec[i] = eig.coeffRef(i);
+    return vec;
+  }
+
+  template<class T>
+  inline Eigen::Matrix<T, Eigen::Dynamic, 1> vecToEig(const std::vector<T>& vec)
+  {
+    Eigen::Matrix<T, Eigen::Dynamic, 1> eig(vec.size());
+    for(int i = 0; i < eig.rows(); ++i)
+      eig.coeffRef(i) = vec[i];
+    return eig;
   }
   
 }

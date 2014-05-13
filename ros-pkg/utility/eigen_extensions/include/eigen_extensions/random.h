@@ -17,12 +17,11 @@ namespace eigen_extensions
     virtual double sample() = 0;
   };
   
-  class UniformSampler : public Sampler
+  class UniformSampler
   {
   public:
     UniformSampler(uint64_t seed = 0);
-    //! In [0, 1].
-    double sample();
+    uint64_t sample();
     
   protected:
     std::tr1::mt19937 mersenne_;
@@ -46,7 +45,7 @@ namespace eigen_extensions
   {
     for(int i = 0; i < mat->cols(); ++i)
       for(int j = 0; j < mat->rows(); ++j)
-        mat->coeffRef(j, i) = sample();
+	mat->coeffRef(j, i) = sample();
   }
   
   template<class S, int T, int U>
@@ -60,7 +59,10 @@ namespace eigen_extensions
   int weightedSample(Eigen::VectorXd weights);
   //! Fills indices with samples from the weights vector, with replacement.
   void weightedSample(Eigen::VectorXd weights, Eigen::VectorXi* indices);
-  void weightedSampleLowVariance(Eigen::VectorXd weights, Eigen::VectorXi* indices);
+  //! Uses mersenne for generating random numbers.
+  void weightedSampleLowVariance(Eigen::VectorXd weights,
+                                 std::tr1::mt19937* mersenne,
+                                 Eigen::VectorXi* indices);
 }
 
 

@@ -1,6 +1,7 @@
 #ifndef OUTLET_H
 #define OUTLET_H
 
+#include <boost/any.hpp>
 #include <pipeline/common.h>
 
 namespace pl
@@ -32,7 +33,7 @@ namespace pl
     template<typename T> void setType();
     void flush() { data_ = (void*)NULL; has_data_ = false; }
     Pod* pod() const { return pod_; }
-    std::string getName() const { return name_; }
+    std::string name() const { return name_; }
     std::string address() const;
     bool hasData() const { return has_data_; }
     bool checkType(boost::any test) const { return (type_.type() == test.type()); }
@@ -50,6 +51,7 @@ namespace pl
     Outlet& operator=(const Outlet& otl);
   };
 
-}
+
+} // namespace
 
 #endif // OUTLET_H

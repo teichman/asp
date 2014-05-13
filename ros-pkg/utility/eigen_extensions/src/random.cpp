@@ -7,14 +7,13 @@ namespace eigen_extensions
 {
 
   UniformSampler::UniformSampler(uint64_t seed) :
-    Sampler(),
     mersenne_(seed)
   {
   }
 
-  double UniformSampler::sample()
+  uint64_t UniformSampler::sample()
   {
-    return (double)mersenne_() / mersenne_.max();
+    return mersenne_();
   }
 
   GaussianSampler::GaussianSampler(double mean, double stdev, uint64_t seed) :
@@ -55,7 +54,7 @@ namespace eigen_extensions
     for(int i = 0; i < weights.rows(); ++i) {
       cumulative += weights(i) * inv_sum;
       if(cumulative >= r)
-        return i;
+	return i;
     }
     return weights.rows() - 1;
   }
@@ -67,19 +66,20 @@ namespace eigen_extensions
       indices->coeffRef(i) = weightedSample(weights);
   }
 
-  void weightedSampleLowVariance(Eigen::VectorXd weights, Eigen::VectorXi* indices)
+  void weightedSampleLowVariance(Eigen::VectorXd weights, std::tr1::mt19937* mersenne, Eigen::VectorXi* indices)
   {
     assert(indices->rows() > 0);
+
     weights /= weights.sum();
-    double r = ((double)rand() / RAND_MAX) / indices->rows();
+    double r = ((double)(*mersenne)() / mersenne->max()) / indices->rows();
     double c = weights(0);
     int i = 0;
     for(int m = 0; m < indices->rows(); ++m) {
       double u = r + m / (double)indices->rows();
       while(u > c) {
-        ++i;
-        i = min(i, (int)(weights.rows() - 1));  // edge case
-        c += weights(i);
+	++i;
+	i = min(i, (int)(weights.rows() - 1));  // edge case
+	c += weights(i);
       }
       indices->coeffRef(m) = i;
     }

@@ -208,5 +208,131 @@ namespace pl
       push<Vec::ConstPtr>("ChangedVals", vals_);
     }
 
+
+    ostream& operator<<(ostream& out, const std::vector<double>& vec)
+    {
+      out << "Vec: ";
+      for(size_t i = 0; i < vec.size(); ++i) 
+        out << " " << vec[i];
+      return out;
+    }
+
+    double sample()
+    {
+      double val = 0;
+      for(int i = 0; i < 12; ++i) {
+        val += ((double)rand() / (double)RAND_MAX) * 2.0 - 1.0;
+      }
+      val /= 2.0;
+      return val;
+    }
+
+    Vec::Ptr generateVec(int num_points)
+    {
+      Vec::Ptr vec(new Vec(num_points));
+      for(size_t i = 0; i < vec->size(); ++i)
+        vec->at(i) = sample();
+
+      return vec;
+    }
+
+    void registerPods()
+    {
+      REGISTER_POD_TEMPLATE(EntryPoint, Vec::ConstPtr);
+      REGISTER_POD_TEMPLATE(EntryPoint, boost::shared_ptr<const Vec>);
+      REGISTER_POD(Sorter);
+      REGISTER_POD(Summarizer);
+      REGISTER_POD(Aggregator);
+      REGISTER_POD(DescriptorAssembler);
+      REGISTER_POD(HistogramGenerator);
+      REGISTER_POD(ConcretePodA);
+      REGISTER_POD(ConcretePodB);
+    }
+
+    void generateDefaultPipeline(Pipeline* pl)
+    {
+      pl->createPod("EntryPoint<boost::shared_ptr<const Vec>>", "View0");
+      pl->createPod("EntryPoint<boost::shared_ptr<const Vec>>", "View1");
+      pl->createPod("EntryPoint<boost::shared_ptr<const Vec>>", "View2");
+
+      pl->createPod("Sorter", "Sorter0");
+      pl->createPod("Sorter", "Sorter1");
+      pl->createPod("Sorter", "Sorter2");
+      pl->connect("Sorter0.Points <- View0.Output");
+      pl->connect("Sorter1.Points <- View1.Output");
+      pl->connect("Sorter2.Points <- View2.Output");
+
+      pl->createPod("Summarizer", "Summarizer0");
+      pl->createPod("Summarizer", "Summarizer1");
+      pl->createPod("Summarizer", "Summarizer2");
+      pl->connect("Summarizer0.Points <- Sorter0.Sorted");
+      pl->connect("Summarizer1.Points <- Sorter1.Sorted");
+      pl->connect("Summarizer2.Points <- Sorter2.Sorted");
+      
+      pl->createPod("Aggregator", "Aggregator0");
+      pl->connect("Aggregator0.PointSets <- Sorter0.Sorted");
+      pl->connect("Aggregator0.PointSets <- Sorter1.Sorted");
+      pl->connect("Aggregator0.PointSets <- Sorter2.Sorted");
+
+      pl->createPod("Summarizer", "Summarizer3");
+      pl->connect("Summarizer3.Points <- Aggregator0.Aggregated");
+
+      pl->createPod("HistogramGenerator", "HistogramGenerator0");
+      pl->createPod("HistogramGenerator", "HistogramGenerator1");
+      pl->createPod("HistogramGenerator", "HistogramGenerator2");
+      pl->createPod("HistogramGenerator", "HistogramGenerator3");
+
+      pl->connect("HistogramGenerator0.Points <- Sorter0.Sorted");
+      pl->pod("HistogramGenerator0")->setParam("BinWidth", 0.5);
+      pl->pod("HistogramGenerator0")->setParam("Min", -2.0);
+      pl->pod("HistogramGenerator0")->setParam("Max", 2.0);
+
+      pl->connect("HistogramGenerator1.Points <- Sorter1.Sorted");
+      pl->pod("HistogramGenerator1")->setParam("BinWidth", 0.5);
+      pl->pod("HistogramGenerator1")->setParam("Min", -2.0);
+      pl->pod("HistogramGenerator1")->setParam("Max", 2.0);
+
+      pl->connect("HistogramGenerator2.Points <- Sorter2.Sorted");
+      pl->pod("HistogramGenerator2")->setParam("BinWidth", 0.5);
+      pl->pod("HistogramGenerator2")->setParam("Min", -2.0);
+      pl->pod("HistogramGenerator2")->setParam("Max", 2.0);
+
+      pl->connect("HistogramGenerator3.Points <- Aggregator0.Aggregated");
+      pl->pod("HistogramGenerator3")->setParam("BinWidth", 0.25);
+      pl->pod("HistogramGenerator3")->setParam("Min", 0.0);
+      pl->pod("HistogramGenerator3")->setParam("Max", 3.0);
+
+      pl->createPod("DescriptorAssembler", "DescriptorAssembler");
+
+      pl->connect("DescriptorAssembler.SubVectors <- HistogramGenerator0.Histogram");
+      pl->connect("DescriptorAssembler.SubVectors <- HistogramGenerator1.Histogram");
+      pl->connect("DescriptorAssembler.SubVectors <- HistogramGenerator2.Histogram");
+      pl->connect("DescriptorAssembler.SubVectors <- HistogramGenerator3.Histogram");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer0.Mean");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer0.Stdev");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer0.MeanNeighborSeparation");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer1.Mean");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer1.Stdev");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer1.MeanNeighborSeparation");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer2.Mean");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer2.Stdev");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer2.MeanNeighborSeparation");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer3.Mean");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer3.Stdev");
+      pl->connect("DescriptorAssembler.Elements <- Summarizer3.MeanNeighborSeparation");
+
+      pl->createPod("ConcretePodA", "ConcretePodA");
+      pl->createPod("ConcretePodB", "ConcretePodB");
+      pl->pod("ConcretePodB")->setParam("Something", true);
+      
+      pl->connect("ConcretePodA.Vals <- DescriptorAssembler.Descriptor");
+      pl->connect("ConcretePodB.Vals <- DescriptorAssembler.Descriptor");
+    }
+
+    bool isRequired(Pod* pod)
+    {
+      return (dynamic_cast< EntryPoint<Vec::ConstPtr>* >(pod) || dynamic_cast<DescriptorAssembler*>(pod));
+    }
+
   } // namespace example
 } // namespace pl

@@ -2,6 +2,7 @@
 #define PIPELINE_H
 
 #include <boost/algorithm/string.hpp>
+#include <boost/bind.hpp>
 #include <pipeline/pod.h>
 #include <pipeline/common_pods.h>
 
@@ -11,13 +12,16 @@ namespace pl
 /*
  * Todo list
  *
- * - We need a name for Pod:Output.  "Address"?  "Port"?
+ * - We need a name for Pod.Output.  "Address"?  "Port"?
  * - Pod:Output -> Pod:Input should have a name?  "Connection string"?
  * - It should be impossible to declare void debug() in a pod.  The right function is
  *   void debug() const, and if you use the former it just never gets called and you
  *   don't know why.
  */
  
+
+  typedef bool (*GenericPodTest)(Pod* pod);
+  template<typename T> bool isPodType(Pod* pod) { return pod->isPodType<T>(); }
   
   //! Class that represents the entire computation graph and manages its execution.
   //! Pods added to a Pipeline will be deleted by that Pipeline.
@@ -27,42 +31,42 @@ namespace pl
     // -- Setup
     // ----------------------------------------
     Pipeline(int num_threads);
-    //! Adds all Pods that are connected to pod.
-    void addConnectedComponent(Pod* pod);
-    void addPods(const std::vector<Pod*>& pods);
-    void addPod(Pod* pod);
-    void connect(std::string source_pod, std::string source_output,
-                 std::string sink_pod, std::string sink_input);
-    //! "Pod.Output -> Pod.Input"
-    //! TODO: Maybe allow only this method of making connections.
-    //! Then completeness is guaranteed.
-    //! Also, it's hard to misinterpret this, whereas it's easy to mix up
-    //! the ordering of any of the other ways of doing it.
-    //!
-    //! TODO: Also, it would probably make sense to allow colons and use something
-    //! else for the separator.  Maybe a slash.
+    //! Creates a Pod and adds it to the Pipeline.
+    Pod* createPod(const std::string& type, const std::string& name);
+    //! Creates a Pod with an automatically-generated unique name and
+    //! adds it to the Pipeline.
+    Pod* createPod(const std::string& type);
+    //! "Pod.Input <- Pod.Output"
     void connect(std::string connection);
+    //! Opposite of connect.
+    void disconnect(std::string connection);
     template<typename T> void setParam(std::string pod_name, std::string param_name, T val);
+    //! Calls setData on an EntryPoint<T>.
+    //! This is the normal way of pushing new data into a Pipeline.
+    template<typename T> void push(const std::string& pod_name, T data);
     
     // ----------------------------------------
     // -- Execution
     // ----------------------------------------
-    //! Calls setData on an EntryPoint<T> with name pod_name.
-    template<typename T> void setInput(const std::string& pod_name, T data);
     //! Runs all computation until completion.
     void compute();
     //! Calls reset() on all pods.
+    //! What this actually does is Pod-specific, but typically it is something like
+    //! clearing any data that is shared across many calls of compute().
     void reset();
     //! Convenient way of pulling output from the Pipeline.
     template<typename T> T pull(const std::string& pod_name, const std::string& output_name) const;
     //! Convenient way of pulling output from the Pipeline.
-    //! "Pod:Output"
+    //! "Pod.Output"
     template<typename T> T pull(const std::string& address) const;
     //! Convenient way of pulling output from the Pipeline.
     template<typename T> void pull(const std::string& pod_name,
                                    const std::string& output_name,
                                    T* dest) const;
-
+    //! Convenient way of pulling output from the Pipeline.
+    //! "Pod.Output"
+    template<typename T> void pull(const std::string& address, T* dest) const;
+    
     // ----------------------------------------
     // -- Control
     // ----------------------------------------
@@ -81,15 +85,43 @@ namespace pl
     // ----------------------------------------
     // -- Pod access
     // ----------------------------------------
+    bool hasPod(const std::string& name) const;
+    //! Returns true if at least one Pod of type T
+    //! exists in the Pipeline.
+    template<typename T> bool hasPod() const;
     //! Returns the Pod with the supplied name.
     Pod* pod(const std::string& name) const;
+    //! Returns all Pods that pass the test.
+    std::vector<Pod*> filterPods(GenericPodTest test) const;
     //! Returns the Pod of type T.  There must be exactly one.
     template<typename T> T* pod() const;
     //! Returns the Pod of type T with the supplied name.
     template<typename T> T* pod(const std::string& name) const;
     //! Return all pods of type T for which the given the test function evaluates to true.
     template<typename T> std::vector<T*> filterPods(bool (*test)(T* pod) = NULL) const;
+    const std::vector<Pod*>& pods() const { return pods_; }
 
+    // ----------------------------------------
+    // -- Things specifically useful for Pipeline learning
+    // ----------------------------------------
+    
+    //! Deletes the pod and removes all connections that involve it.
+    void deletePod(const std::string& name);
+    //! Deletes any Pod that either A) has no outputs or B) does not have all its
+    //! inputs.  Continues doing this until there is nothing left to delete.
+    //! Returns true if it deleted something.
+    //! Test should return true for anything that is immune from pruning.
+    //! For example, this might include required inputs and outputs.
+    //! There is no default because at the minimum, your EntryPoint Pods
+    //! and output pods should be immune.  See isPodType() for an example.
+    void prune(GenericPodTest isImmune);
+    template<typename T> std::string defaultPodName() const;
+    std::string defaultPodName(const std::string type) const;
+    //! Returns "Pod.Output" for a random output pipe of type T.
+    template<typename T> std::string randomOutput() const;
+    //! Returns a random Pod of type T, or NULL if there aren't any.
+    template<typename T> T* randomPod() const;
+    
     // ----------------------------------------
     // -- Reporting
     // ----------------------------------------
@@ -101,6 +133,7 @@ namespace pl
     // ----------------------------------------
     // -- Things you don't need to care about
     // ----------------------------------------
+    
     virtual ~Pipeline();
     YAML::Node YAMLize() const;
     void deYAMLize(const YAML::Node& in);
@@ -141,10 +174,6 @@ namespace pl
     bool computing();
     int switchComponent(Pod* pod, bool disabled);
     void run();
-    //! Makes sure that all Pods in the Pipeline are actually in pods_.
-    void assertCompleteness();
-    //! Makes sure there are no duplicate Pods or duplicate Pod names in the Pipeline.
-    void assertNoDuplicates() const;
     
     friend void* propagateComputation(void *pipeline);
   };
@@ -174,11 +203,17 @@ namespace pl
   {
     pod(pod_name)->setParam(param_name, val);
   }
+
+  template<typename T>
+  bool Pipeline::hasPod() const
+  {
+    return !filterPods<T>().empty();
+  }
   
   template<typename T>
   std::vector<T*> Pipeline::filterPods(bool (*test)(T* pod)) const
   {
-    return Pipeline::filterPods<T>(pods_, test); // Pipeline:: is required; otherwise g++ thinks that we're calling a member function which doesn't exist.
+    return pl::filterPods<T>(pods_, test); // Pipeline:: is required; otherwise g++ thinks that we're calling a member function which doesn't exist.
   }
   
   template<typename T>
@@ -214,12 +249,14 @@ namespace pl
 
     if(!(passed.size() == 1 || passed.size() == 0)) {
       PL_ABORT("Called pod<T>(), but multiple Pods of type T were found."
-               << " You probably need to use pod<T>(name).");
+               << " You probably need to use pod<T>(name).  typeid(T).name():"
+               << typeid(T).name());
     }
     if(passed.size() == 1)
       return passed[0];
     else {
-      PL_ABORT("Called pod<T>(), but no Pods of type T were found.");
+      PL_ABORT("Called pod<T>(), but no Pods of type T were found.  typeid(T).name(): "
+               << typeid(T).name());
     }
     return NULL;
   }
@@ -236,7 +273,7 @@ namespace pl
     std::vector<T*> passed;
     for(size_t i = 0; i < pods.size(); ++i) {
       T* casted = dynamic_cast<T*>(pods[i]);
-      if(!casted || casted->getName().compare(name) != 0)
+      if(!casted || casted->name().compare(name) != 0)
         continue;
       
       passed.push_back(casted);
@@ -267,7 +304,10 @@ namespace pl
   {
     std::vector<std::string> tokens;
     boost::split(tokens, address, boost::is_any_of(separatorString()));
-    PL_ASSERT(tokens.size() == 2);
+    if(tokens.size() != 2) {
+      PL_ABORT("Tried to pull output from pipeline address \"" << address
+               << "\", which appears to be malformed.  It should be PodInstanceName.OutputName");
+    }
     return pull<T>(tokens[0], tokens[1]);
   }
 
@@ -278,9 +318,47 @@ namespace pl
     *dest = pod(pod_name)->getOutlet(outlet_name)->pull<T>();
   }
 
-  template<typename T> void Pipeline::setInput(const std::string& pod_name, T data)
+  template<typename T> void Pipeline::pull(const std::string& address, T* dest) const
+  {
+    std::vector<std::string> tokens;
+    boost::split(tokens, address, boost::is_any_of(separatorString()));
+    PL_ASSERT(tokens.size() == 2);
+    return pull<T>(tokens[0], tokens[1], dest);
+  }
+
+  template<typename T> void Pipeline::push(const std::string& pod_name, T data)
   {
     pod< EntryPoint<T> >(pod_name)->setData(data);
+  }
+
+  template<typename T> std::string Pipeline::defaultPodName() const
+  {
+    std::vector<T*> pods = filterPods<T>();
+    std::ostringstream oss;
+    T tmp("foo");
+    oss << tmp.getClassName() << std::setw(2) << std::setfill('0') << pods.size();
+    return oss.str();
+  }
+
+  template<typename T> std::string Pipeline::randomOutput() const
+  {
+    std::vector<std::string> addresses;
+    for(size_t i = 0; i < pods_.size(); ++i) {
+      std::vector<std::string> outputs = pods_[i]->outputs<T>();
+      for(size_t j = 0; j < outputs.size(); ++j)
+        addresses.push_back(pods_[i]->name() + separator() + outputs[j]);
+    }
+
+    return addresses[rand() % addresses.size()];
+  }
+
+  template<typename T> T* Pipeline::randomPod() const
+  {
+    std::vector<T*> pods = filterPods<T>();
+    if(pods.empty())
+      return NULL;
+    else
+      return pods[rand() % pods.size()];
   }
   
 } // namespace pl

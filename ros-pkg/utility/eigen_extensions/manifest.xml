@@ -10,7 +10,7 @@
   <url>http://ros.org/wiki/eigen_extensions</url>
   <depend package="eigen_flags"/>
   <depend package="gzstream"/>
-  <depend package="timer"/>
+  <depend package="bag_of_tricks"/>
 
   <export>
     <cpp cflags="-I${prefix}/include" lflags="-L${prefix}/lib -Wl,-rpath ${prefix}/lib `rosboost-cfg --lflags filesystem` `rosboost-cfg --lflags system` -leigen_extensions"/>

@@ -43,9 +43,8 @@ TEST(EigenExtensions, weightedSampleLowVariance)
   weights.tail(chunk_size).setConstant(chunk_size);
 
   VectorXi indices(buffer_size);
-  srand(time(NULL));
-  cout << "random number: " << rand() << endl;
-  weightedSampleLowVariance(weights, &indices);
+  std::tr1::mt19937 mersenne;
+  weightedSampleLowVariance(weights, &mersenne, &indices);
 
   int num_new = 0;
   int num_old = 0;

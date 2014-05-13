@@ -17,7 +17,6 @@ namespace pl {
     pthread_cond_init(&queue_cv_, NULL);
     pthread_cond_init(&done_cv_, NULL);
     
-    assertCompleteness();
     spawnThreadPool(num_threads_);
   }
 
@@ -31,11 +30,42 @@ namespace pl {
       delete pods_[i];
   }
 
+  Pod* Pipeline::createPod(const std::string& type, const std::string& name)
+  {
+    Pod* pod = Pod::createPod(type, name);
+    pods_.push_back(pod);
+    if(pod_names_.count(name) != 0) {
+      PL_ABORT("Tried to create Pod with name \"" << name << "\", but a Pod with that name already exists.");
+    }
+    pod_names_[pod->name()] = pod;
+    PL_ASSERT(pods_.size() == pod_names_.size());
+    return pod;
+  }
+
+  std::string Pipeline::defaultPodName(const std::string type) const
+  {
+    string name;
+    for(size_t i = 0; i < 100; ++i) { 
+      ostringstream oss;
+      oss << type << setw(2) << setfill('0') << i;
+      name = oss.str();
+      if(!hasPod(name))
+        break;
+    }
+    return name;
+  }
+  
+  Pod* Pipeline::createPod(const std::string& type)
+  {
+    string name = defaultPodName(type);
+    return createPod(type, name);
+  }
+  
   void Pipeline::setDebug(bool debug)
   {
     debug_ = debug;
     for(size_t i = 0; i < pods_.size(); ++i) {
-      cout << "Setting debug to " << debug << " for pod \"" << pods_[i]->getName() << "\"" << endl;
+      //cout << "Setting debug to " << debug << " for pod \"" << pods_[i]->name() << "\"" << endl;
       pods_[i]->debug_ = debug;
     }
 
@@ -53,73 +83,35 @@ namespace pl {
     killThreadPool();
     spawnThreadPool(num_threads);
   }
-  
 
-  void Pipeline::assertNoDuplicates() const
+  void parseConnection(const std::string& connection,
+                       std::string* sink_pod,
+                       std::string* sink_input,
+                       std::string* source_pod,
+                       std::string* source_output)
   {
-    // Check for duplicate pod pointers.
-    set<Pod*> all;
-    for(size_t i = 0; i < pods_.size(); ++i)
-      all.insert(pods_[i]);
-    if(all.size() != pods_.size())
-      PL_ABORT("Duplicate Pod pointers found in Pipeline.");
-
-    // Check for duplicated names.
-    set<string> names;
-    for(size_t i = 0; i < pods_.size(); ++i) {
-      if(names.count(pods_[i]->getName()) != 0)
-        PL_ABORT("Duplicate Pod name \"" << pods_[i]->getName() << "\".");
-      names.insert(pods_[i]->getName());
-    }
-  }
-  
-  void Pipeline::addConnectedComponent(Pod* pod)
-  {
-    addPods(getComponent(pod));
-    assertCompleteness();
+    const string& c = connection;
+    *sink_pod = c.substr(0, c.find_first_of(separator()));
+    *sink_input = c.substr(c.find_first_of(separator()) + 1, c.find_first_of(" ") - c.find_first_of(separator()) - 1);
+    string r = c.substr(c.find_first_of("<- ")).substr(4);
+    *source_pod = r.substr(0, r.find_first_of(separator()));
+    *source_output = r.substr(r.find_first_of(separator()) + 1);
   }
 
-  void Pipeline::addPod(Pod* pod)
-  {
-    pods_.push_back(pod);
-    pod_names_[pod->getName()] = pod;
-    //assertCompleteness();
-    assertNoDuplicates();
-    PL_ASSERT(pods_.size() == pod_names_.size());
-  }
-
-  void Pipeline::addPods(const std::vector<Pod*>& pods)
-  {
-    for(size_t i = 0; i < pods.size(); ++i)
-      addPod(pods[i]);
-  }
-  
-  void Pipeline::connect(std::string source_pod, std::string source_output,
-                         std::string sink_pod, std::string sink_input)
-  {
-    pod(sink_pod)->registerInput(sink_input, pod(source_pod), source_output);
-    assertCompleteness();
-  }
-  
   void Pipeline::connect(std::string connection)
   {
-    // TODO: Make this use explode()
-    
-    const string& c = connection;
-    string source_pod = c.substr(0, c.find_first_of(separator()));
-    //cout << "source_pod: " << source_pod << endl;
-    string source_output = c.substr(c.find_first_of(separator()) + 1, c.find_first_of(" ") - c.find_first_of(separator()) - 1);
-    //cout << "source_output: " << source_output << endl;
-    string r = c.substr(c.find_first_of("-> ")).substr(4);
-    //cout << "r: " << r << endl;
-    string sink_pod = r.substr(0, r.find_first_of(separator()));
-    //cout << "sink_pod: " << sink_pod << endl;
-    string sink_input = r.substr(r.find_first_of(separator()) + 1);
-    //cout << "sink_input: " << sink_input << endl;
-
-    connect(source_pod, source_output, sink_pod, sink_input);
+    string sink_pod, sink_input, source_pod, source_output;
+    parseConnection(connection, &sink_pod, &sink_input, &source_pod, &source_output);
+    pod(sink_pod)->registerInput(sink_input, pod(source_pod), source_output);
   }
-    
+
+  void Pipeline::disconnect(std::string connection)
+  {
+    string sink_pod, sink_input, source_pod, source_output;
+    parseConnection(connection, &sink_pod, &sink_input, &source_pod, &source_output);
+    pod(sink_pod)->unregisterInput(sink_input, pod(source_pod), source_output);
+  }
+
   bool Pipeline::trylock() {
     if(pthread_mutex_trylock(&mutex_) == EBUSY)
       return false;
@@ -134,27 +126,7 @@ namespace pl {
   void Pipeline::unlock() {
     pthread_mutex_unlock(&mutex_);
   }
-  
-  void Pipeline::assertCompleteness() {
-    queue<Pod*> to_check;
-    for(size_t i = 0; i < pods_.size(); ++i) {
-      if(pods_[i]->parents_.empty())
-        to_check.push(pods_[i]);
-    }
-
-    set<Pod*> found;
-    while(!to_check.empty()) {
-      Pod* active = to_check.front();
-      to_check.pop();
-      found.insert(active);  // Won't insert duplicates.
-      for(size_t i = 0; i < active->children_.size(); ++i) {
-        to_check.push(active->children_[i]);
-      }
-    }
-
-    assert(found.size() == pods_.size());  
-  }
-  
+    
   void Pipeline::reset()
   {
     for(size_t i = 0; i < pods_.size(); ++i)
@@ -230,7 +202,7 @@ namespace pl {
     if(marked.size() != pods_.size()) { 
       for(size_t i = 0; i < pods_.size(); ++i)
         if(marked.count(pods_[i]) == 0)
-          cout << "Node not in marked: " << pods_[i]->getName() << endl;
+          cout << "Node not in marked: " << pods_[i]->name() << endl;
 
       cout << "Error in pipeline2::reportSlowestPath.  marked.size() == "
            << marked.size() << ", pods_.size() == " << pods_.size() << endl;
@@ -260,7 +232,7 @@ namespace pl {
     for(int i = (int)path.size() - 1; i >= 0; --i) {
       oss << "  " << fixed << setprecision(2) << setw(8) << times[path[i]]
           << "\t" << fixed << setprecision(2) << setw(8) << path[i]->getComputationTime()
-          << "\t" << path[i]->getName() << endl;
+          << "\t" << path[i]->name() << endl;
     }
     return oss.str();
   }
@@ -279,7 +251,7 @@ namespace pl {
     vector< pair<double, size_t> > index;
     double total_time = 0;
     for(size_t i = 0; i < pods_.size(); ++i) {
-      names.push_back(pods_[i]->getName());
+      names.push_back(pods_[i]->name());
       times.push_back(pods_[i]->getComputationTime());
       index.push_back(pair<double, size_t>(times.back(), i));
       total_time += times.back();
@@ -292,7 +264,10 @@ namespace pl {
     }
     oss << "Number of threads:\t\t" << threads_.size() << endl;
     oss << "Sum of pod compute times:\t" << total_time << " ms." << endl;
-    oss << "Start-to-finish wall time:\t" << time_msec_ << " ms." << endl;
+    if(debug_)
+      oss << "Start-to-finish wall time (including debug() calls):\t" << time_msec_ << " ms." << endl;
+    else
+      oss << "Start-to-finish wall time:\t" << time_msec_ << " ms." << endl;
     oss << endl;
     oss << reportSlowestPath() << endl;
     oss << "============================================================" << endl;
@@ -311,7 +286,7 @@ namespace pl {
     oss << endl;
 
     for(size_t i = 0; i < pods_.size(); ++i) {
-      oss << (uint64_t)pods_[i] << " [label=\"" << sanitize(pods_[i]->getName()) << "\"]" << endl;
+      oss << (uint64_t)pods_[i] << " [label=\"" << sanitize(pods_[i]->name()) << "\"]" << endl;
     }
     oss << endl;
 
@@ -530,64 +505,56 @@ namespace pl {
     return vec;
   }
 
+  vector<string> explode(const string& str)
+  {
+    vector<string> result;
+    istringstream iss(str);
+    while(!iss.eof()) {
+      string buf;
+      iss >> buf;
+      if(buf != "")
+        result.push_back(buf);
+    }
+    return result;
+  }
+    
   void Pipeline::deYAMLize(const YAML::Node& in)
   {
     // -- Clean up existing pipeline.
-    for(size_t i = 0; i < pods_.size(); ++i)
+    for(size_t i = 0; i < pods_.size(); ++i) {
+      PL_ASSERT(pods_[i]);
       delete pods_[i];
+    }
     pods_.clear();
     pod_names_.clear();
 
-    // -- Set up everything but the connections.
-    //    This is unnecessarily complicated.
-    vector<string> input_lines;
-    vector<string> multi_input_lines;
-    map<string, Pod*> pod_names; // Storage until we can get them hooked up.
-    vector<Pod*> pods;
+    // -- Create pods.
     for(size_t i = 0; i < in["Pods"].size(); ++i) {
       const YAML::Node& podyaml = in["Pods"][i];
       string name = podyaml["Name"].as<string>();
       string type = podyaml["Type"].as<string>();
-
-      const YAML::Node& inputs = podyaml["Inputs"];
-      for(YAML::const_iterator it = inputs.begin(); it != inputs.end(); ++it) {
-        input_lines.push_back(name + " " + it->first.as<string>() + " <- " + it->second.as<string>());
-      }
-
-      Params params = podyaml["Params"].as<Params>();
-      Pod* pod = Pod::createPod(type, name, params);
-
-      PL_ASSERT(pod_names.count(pod->getName()) == 0);
-      pod_names[pod->getName()] = pod;
-      pods.push_back(pod);
+      createPod(type, name);
+      pod(name)->setParams(podyaml["Params"].as<Params>());
     }
 
     // -- Connect everything.
-    for(size_t i = 0; i < input_lines.size(); ++i) {
-      istringstream iss(input_lines[i]);
-      string consumer_pod_name;
-      string input_name;
-      string buf;
-      iss >> consumer_pod_name;
-      iss >> input_name;
-      PL_ASSERT(pod_names.count(consumer_pod_name) == 1);
-      iss >> buf; // <-
+    for(size_t i = 0; i < in["Pods"].size(); ++i) {
+      const YAML::Node& podyaml = in["Pods"][i];
+      string dst_name = podyaml["Name"].as<string>();
 
-      vector<string> producer_pod_names;
-      vector<string> output_names;
-      while(!iss.eof()) {
-        iss >> buf;
-        producer_pod_names.push_back(buf.substr(0, buf.find(separator())));
-        output_names.push_back(buf.substr(buf.find(separator()) + 1));
-        PL_ASSERT(pod_names.count(producer_pod_names.back()) == 1);
+      const YAML::Node& inputs = podyaml["Inputs"];
+      for(YAML::const_iterator it = inputs.begin(); it != inputs.end(); ++it) {
+        string dst_input = it->first.as<string>();
+        string sources = it->second.as<string>();
+        vector<string> split = explode(sources);
+        for(size_t i = 0; i < split.size(); ++i) {
+          string src = split[i];
+          string src_name = src.substr(0, src.find(separator()));
+          string src_output = src.substr(src.find(separator()) + 1);
+          connect(dst_name + separator() + dst_input + " <- " + src_name + separator() + src_output);
+        }
       }
-      PL_ASSERT(!producer_pod_names.empty());
-      PL_ASSERT(producer_pod_names.size() == output_names.size());
-      for(size_t j = 0; j < producer_pod_names.size(); ++j)
-        pod_names[consumer_pod_name]->registerInput(input_name, pod_names[producer_pod_names[j]], output_names[j]);
     }
-
-    addPods(pods);
   }
 
   YAML::Node Pipeline::YAMLize() const
@@ -607,6 +574,113 @@ namespace pl {
       PL_ABORT("Called pod(\"" << name << "\"), but no Pod with that name exists.");
     }
     return it->second;
+  }
+
+  bool Pipeline::hasPod(const std::string& name) const
+  {
+    PL_ASSERT(pod_names_.size() == pods_.size());
+    return (pod_names_.find(name) != pod_names_.end());
+  }
+
+  std::vector<Pod*> Pipeline::filterPods(GenericPodTest test) const
+  {
+    vector<Pod*> pods;
+    pods.reserve(pods_.size());
+    for(size_t i = 0; i < pods_.size(); ++i)
+      if(test(pods_[i]))
+        pods.push_back(pods_[i]);
+    return pods;
+  }
+
+  bool isPod(Pod* pod0, Pod* pod1)
+  {
+    return (pod0 == pod1);
+  }
+  
+  void Pipeline::deletePod(const std::string& name)
+  {
+    assert(queue_.empty());
+
+    Pod* ptr = pod(name);
+
+    // -- Delete records of this Pod in the Pipeline object.
+    vector<Pod*>::iterator it = find(pods_.begin(), pods_.end(), ptr);
+    pods_.erase(it);
+    pod_names_.erase(pod_names_.find(name));
+
+    // -- For every other Pod in the Pipeline,
+    //    delete any evidence of that Pod.
+    //    TODO: This could be asymptotically faster.
+    for(size_t i = 0; i < pods_.size(); ++i) {
+      Pod& pod = *pods_[i];
+
+      // parents_ and children_
+      it = remove_if(pod.parents_.begin(), pod.parents_.end(), boost::bind(isPod, _1, ptr));
+      pod.parents_.erase(it, pod.parents_.end());
+      it = remove_if(pod.children_.begin(), pod.children_.end(), boost::bind(isPod, _1, ptr));
+      pod.children_.erase(it, pod.children_.end());
+      
+      for(size_t j = 0; j < pod.parents_.size(); ++j)
+        PL_ASSERT(pod.parents_[j] != ptr);
+      for(size_t j = 0; j < pod.children_.size(); ++j)
+        PL_ASSERT(pod.children_[j] != ptr);
+
+      // inputs_
+      std::map<std::string, std::vector<const Outlet*> >::iterator iit;
+      for(iit = pod.inputs_.begin(); iit != pod.inputs_.end(); ++iit) {
+        vector<const Outlet*>& outlets = iit->second;
+        for(int j = 0; j < (int)outlets.size(); ++j) {
+          if(outlets[j]->pod() == ptr) {
+            outlets.erase(outlets.begin() + j);
+            --j;
+          }
+        }
+      }
+      for(iit = pod.inputs_.begin(); iit != pod.inputs_.end(); ++iit) {
+        vector<const Outlet*>& outlets = iit->second;
+        for(int j = 0; j < (int)outlets.size(); ++j)
+          PL_ASSERT(outlets[j]->pod() != ptr);
+      }
+    }
+
+    delete ptr;
+  }
+  
+  void Pipeline::prune(GenericPodTest isImmune)
+  {
+    if(pods_.empty()) {
+      PL_ABORT("No Pods left during a call to Pipeline::prune()."
+               << "  Did you specify prune's Pod immunity function correctly?"
+               << "  At the minimum, your input and output Pods should be immune.");
+    }
+
+    Pod* to_delete = NULL;
+    
+    // -- Find a Pod that has no outputs.
+    //    or a Pod that does not have all required inputs.
+    for(size_t i = 0; !to_delete && i < pods_.size(); ++i) {
+      if(isImmune(pods_[i])) {
+        //cout << "Ignoring " << pods_[i]->name() << " because it is immune." << endl;
+        continue;
+      }
+      if(pods_[i]->numRegisteredOutputs() == 0 || !pods_[i]->hasAllRequiredInputs()) {
+        to_delete = pods_[i];
+        // cout << "Marking " << to_delete->name() << " for deletion." << endl;
+        // cout << "  numRegisteredOutputs: " << to_delete->numRegisteredOutputs() << endl;
+        // cout << "  hasAllRequiredInputs: " << to_delete->hasAllRequiredInputs() << endl;
+        break;
+      }
+    }
+
+    // -- If there is nothing to delete, then we're done.
+    //    Otherwise, delete until there is nothing left to delete.
+    if(!to_delete)
+      return;
+    else {
+      //cout << "Deleting " << to_delete->name() << endl;
+      deletePod(to_delete->name());
+      prune(isImmune);
+    }
   }
   
 } // namespace pl
